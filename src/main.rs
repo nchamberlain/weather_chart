@@ -181,8 +181,8 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
     } 
 
     // calc these here so available to the functions
-    let y_lowest = city_low-10;
-    let y_highest = city_high + 5;
+    let y_lowest = city_low - 0; // can adjust chart min temp here 
+    let y_highest = city_high + 0; //can adjust chart max temp
     let y_range =  y_highest - y_lowest; //neg y_lowest increases y_range
     let pixel_per_degree: f64 = f64::from(AXIS_HEIGHT) / f64::from(y_range);
     let zero_line_offset: f64; // this is the amount to adjust the bar lengths to account for negative temps. It is the distance from 0 degrees to the bottom line of the chart, in pixels. It is added to the bar length to adjust for negative temps. It is a positive number that represents how many pixels above the bottom line the 0 degree line is.
