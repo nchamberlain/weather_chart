@@ -1,5 +1,6 @@
 use colorize::AnsiColor;
-//use inquire::Select;
+use std::process::Command;
+use execute::Execute;
 use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, MySql, Pool, Row};
 use dotenvy::dotenv;
 use std::env;
@@ -21,6 +22,15 @@ const V_TICK_HEIGHT: i32 = AXIS_HEIGHT / 10;
 const TOP_LINE_Y: i32 = 0 + TOP_MARGIN; //x height of top line of chart, might NOT = TOP_MARGIN
 const BOTTOM_LINE_Y: i32 = TOP_LINE_Y + AXIS_HEIGHT;
 
+// these are ffmpeg related consts
+const FFMPEG_PATH: &str = "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe";
+const PNG_FOLDER: &str = "imgs\\";
+const VIDEO_FOLDER: &str = "video\\";
+const HIDE_BANNER: &str = "-hide_banner";
+const START_NUMBER: &str = "-start_number";  //start_year = first_year
+const FRAMERATE: &str = "-framerate";
+const OVERWRITE: &str = "-y";
+
 fn main()  {
     let _ = get_db_action();
 }
@@ -30,6 +40,7 @@ fn get_db_action() -> Result<(), sqlx::Error>{
         "List all cities",
         "Generate Avgs Charts by CITY",
         "Print Avgs Charts by YEAR",
+        "Generate Videos from Charts",
         "Exit",
     ];
 
@@ -50,7 +61,10 @@ fn get_db_action() -> Result<(), sqlx::Error>{
         }
           else if select == "Print Avgs Charts by YEAR" {
             println!("Print Avgs Charts by YEAR - UNDER CONSTRUCTION");
-            //print_averages_by_year().expect("Failed to print averages by year");
+        }
+          else if select == "Generate Videos from Charts" {
+            println!("Generating Videos from Charts - UNDER CONSTRUCTION");
+            generate_videos_by_city().expect("Failed to generate videos from charts");
         }  else
         if select == "Exit" {
             println!("Exiting the program. Goodbye!");
@@ -624,4 +638,142 @@ async fn get_last_year(pool: &Pool<MySql>, city: &str) -> Result<Vec<MySqlRow>, 
     Ok(rows)
 }
 
+#[tokio::main]
+async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
+    let cities = vec![
+        "Berkeley_CA",
+        "Billings_MT",
+        "Bismarck_ND",
+        "Chicago_IL",
+        "Columbus_OH",
+        "Dallas_TX",
+        "Fairbanks_AK",
+        "Houston_TX",
+        "Indianapolis_IN",
+        "Jacksonville_FL",
+        "Los_Angeles_CA" ,
+        "Minneapolis_MN",
+        "Nashville_TN",
+        "New_York_NY",
+        "Oklahoma_OK",
+        "Philadelphia_PA",
+        "Phoenix_AZ",
+        "San_Antonio_TX",
+        "San_Diego_CA",
+        "San_Francisco_CA",
+        "Seattle_WA",
+        "Spokane_WA",
+    ];
 
+    let prompt_message = "Please select the cities to GENERATE videos".blue();
+    let selected_cities = inquire::MultiSelect::new(&prompt_message, cities)
+        .prompt()
+        .expect("Failed to select cities");
+
+    for the_city in selected_cities {
+        println!("Generating videos for city of {0}", the_city.red());
+        generate_videos_from_charts(the_city).await?;    
+    }
+    Ok(())
+}
+
+async fn generate_videos_from_charts(the_city: &str) -> Result<(), sqlx::Error> {
+    //let city  = the_city.to_string();
+    println!("Generating videos for the city of {0}", the_city);
+    // get the db env info from .env file
+    dotenv().ok();
+    // Set up the database URL from environment variable
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    // Create a connection pool
+    let pool: Pool<MySql> = MySqlPoolOptions::new()
+        .max_connections(5) // Set the maximum number of connections
+        .connect(&database_url)
+        .await?;
+
+    let mut first_year: i32 = 0; 
+    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(&pool, the_city).await;
+    match first_year_result {
+        Ok(_) => { 
+            let first_year_row = &first_year_result.unwrap(); //unwrap the row
+            let first_year_str: &str = first_year_row[0].get("tdate"); //get date string, for ex. 2020-09-05
+            first_year = first_year_str[0..4].parse().unwrap();  //parse first 4 digits as an i32
+            //println!("First year for {}: {}", the_city, &first_year);
+        },
+        Err(e) => eprintln!("Error executing function: {}", e),
+    } 
+    println!("First year: {first_year}  for City: {the_city}"); 
+    // let mut last_year: i32 = 0; // videos will be gen'd for every year after first year so last not needed here
+    
+    let mut fps = 2;
+    let _ = generate_videos(the_city, first_year, fps);
+    fps = 4;
+    let _ = generate_videos(the_city, first_year, fps);
+    fps = 8;
+    let _ = generate_videos(the_city, first_year, fps);
+    fps = 16;
+    let _ = generate_videos(the_city, first_year, fps);
+   
+    Ok(())
+}
+fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn std::error::Error>> {
+    let mut period = "month";
+    let frames_per_second = fps.to_string();
+    let mut cmd = Command::new(FFMPEG_PATH);
+    cmd.arg(HIDE_BANNER).arg(OVERWRITE).arg(START_NUMBER).arg(start_year.to_string())
+    .arg(FRAMERATE).arg(&frames_per_second);
+    let input_arg = format!("{}{}_%4d_{}.png", PNG_FOLDER, city, period);
+    cmd.arg("-i").arg(&input_arg).arg("-c:v").arg("libx264");
+    let mut output_arg = format!("{}{}_{}_{}.mp4", VIDEO_FOLDER, city, period, &frames_per_second);
+    cmd.arg(output_arg);
+
+    println!("Executing command: {:?}", cmd);
+    let mut output = cmd.execute_output().unwrap();
+
+    period = "week";
+    //let frames_per_second = fps.to_string();
+    let mut cmd2 = Command::new(FFMPEG_PATH);
+    cmd2.arg(HIDE_BANNER).arg(OVERWRITE).arg(START_NUMBER).arg(start_year.to_string())
+    .arg(FRAMERATE).arg(&frames_per_second);
+    let input_arg = format!("{}{}_%4d_{}.png", PNG_FOLDER, city, period);
+    cmd2.arg("-i").arg(&input_arg).arg("-c:v").arg("libx264");
+    output_arg = format!("{}{}_{}_{}.mp4", VIDEO_FOLDER, city, period, &frames_per_second);
+    cmd2.arg(&output_arg);
+
+    println!("Executing command: {:?}", cmd2);
+    output = cmd2.execute_output().unwrap();
+
+    period = "fort";
+    //let frames_per_second = fps.to_string();
+    let mut cmd3 = Command::new(FFMPEG_PATH);
+    cmd3.arg(HIDE_BANNER).arg(OVERWRITE).arg(START_NUMBER).arg(start_year.to_string())
+    .arg(FRAMERATE).arg(&frames_per_second);
+    let input_arg = format!("{}{}_%4d_{}.png", PNG_FOLDER, city, period);
+    cmd3.arg("-i").arg(&input_arg).arg("-c:v").arg("libx264");
+    output_arg = format!("{}{}_{}_{}.mp4", VIDEO_FOLDER, city, period, &frames_per_second);
+    cmd3.arg(&output_arg);
+
+    println!("Executing command: {:?}", cmd3);
+    output = cmd3.execute_output().unwrap();
+
+
+    if let Some(exit_code) = output.status.code() {
+        if exit_code == 0 {
+            println!("The weekly exit code is 0 (Ok)");
+        } else {
+            eprintln!("Error executing `{}` with in-file: {} and out-file: {}", FFMPEG_PATH, input_arg, output_arg);
+        }
+    } 
+
+    Ok(())
+}
+
+/*    
+    let mperiod = "Month"; // periods can be Month, Week, or Fort
+    let wperiod = "Week"; 
+    let fperiod = "Fort"; 
+    let mcity_period = format!("{the_city}_{mperiod}");
+    let wcity_period = format!("{the_city}_{wperiod}");
+    let fcity_period = format!("{the_city}_{fperiod}");
+    let tmperiod = "tmonth"; // column names in selected db: can be tmonth, tfort, or tweek
+    let twperiod = "tweek"; 
+    let tfperiod = "tfort";  */

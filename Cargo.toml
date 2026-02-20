@@ -10,3 +10,4 @@ tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"
 inquire = { version = "0.9.3", features = ["date"] }
 colorize = "0.1.0"
+execute = "0.2.15"
