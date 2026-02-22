@@ -335,10 +335,10 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
                 } else {
                     y_adj = (y + z_line_offset).round() as i32;
                 }
-                //println!("BOTTOM_LINE: {BOTTOM_LINE_Y}  Bar length: {y}  zero line: {z_line_offset}  y_adj: {y_adj}");
+                let custom_color = get_warm_colors(tmp);
                 dwg.draw(&Rectangle::new(
                     [(x, BOTTOM_LINE_Y - 2), (x+8, BOTTOM_LINE_Y - y_adj)],
-                    Into::<ShapeStyle>::into(&RED).filled(),
+                    Into::<ShapeStyle>::into(&custom_color).filled(),
                 ))?
             }   
         },
@@ -358,11 +358,10 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
                 } else {
                     y_adj = (y + z_line_offset).round() as i32;
                 }
-                //let y_adj = ((y + z_line_offset) + pixel_per_degree).round() as i32;
-                //println!("BOTTOM_LINE: {BOTTOM_LINE_Y}  Bar length: {y}  zero line: {z_line_offset}  y_adj: {y_adj}");
+                let custom_color = get_warm_colors(tmp);
                 dwg.draw(&Rectangle::new(
                     [(x, BOTTOM_LINE_Y - 2), (x+18, BOTTOM_LINE_Y - y_adj)],
-                    Into::<ShapeStyle>::into(&RED).filled(),
+                    Into::<ShapeStyle>::into(&custom_color).filled(),
                 ))?
             }   
         },
@@ -382,11 +381,10 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
                 } else {
                     y_adj = (y + z_line_offset).round() as i32;
                 }
-                //let y_adj = ((y + z_line_offset) + pixel_per_degree).round() as i32;
-                //println!("BOTTOM_LINE: {BOTTOM_LINE_Y}  Bar length: {y}  zero line: {z_line_offset}  y_adj: {y_adj}");
+                let custom_color = get_warm_colors(tmp);
                 dwg.draw(&Rectangle::new(
                     [(x, BOTTOM_LINE_Y - 2), (x+30, BOTTOM_LINE_Y - y_adj)], //2nd y, bigger number = shorter bars
-                    Into::<ShapeStyle>::into(&RED).filled(),
+                    Into::<ShapeStyle>::into(&custom_color).filled(),
                 ))?;
             }
         },
@@ -394,7 +392,21 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
     }
     Ok(())
 }
-
+fn get_warm_colors(temp: i32) -> RGBColor {
+    if temp <= 0 { // DodgerBlue
+        RGBColor(30, 144, 255) 
+    } else if temp > 0 && temp <= 25 { // BlueViolet
+        RGBColor(138, 43, 226) 
+    } else if temp > 25 && temp <= 50 { // OliveDrab
+        RGBColor(107, 142, 35) 
+    } else if temp > 50 && temp <= 75 { // MediumSpringGreen
+        RGBColor(0, 250, 154)
+    } else if temp > 75 && temp <= 100 { // Orange 
+        RGBColor(255, 165, 0) 
+    } else {
+        RGBColor(255, 0, 0) // Red
+    }
+}
 fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_offset: f64, pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>>  {
     let mut y_adj: i32;
     match period {
@@ -415,10 +427,10 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
                 } else {
                     y_adj = (y + z_line_offset).round() as i32;
                 }
-                //println!("bottom line: {BOTTOM_LINE_Y}  Bar length: {y}  zero line: {z_line_offset}  y_adj: {y_adj}");
+                let custom_color = get_cool_colors(tmp);
                 dwg.draw(&Rectangle::new(
                     [(x, BOTTOM_LINE_Y - 2), (x+8, BOTTOM_LINE_Y - y_adj)],
-                    Into::<ShapeStyle>::into(&GREEN).filled(),
+                    Into::<ShapeStyle>::into(&custom_color).filled(),
                 ))?
             }
         },
@@ -439,10 +451,10 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
                 } else {
                     y_adj = (y + z_line_offset).round() as i32;
                 }
-                //println!("bottom line: {BOTTOM_LINE_Y}  Bar length: {y}  zero line: {z_line_offset}  y_adj: {y_adj}");
+                let custom_color = get_cool_colors(tmp);
                 dwg.draw(&Rectangle::new(
                     [(x, BOTTOM_LINE_Y - 2), (x+18, BOTTOM_LINE_Y - y_adj)], //2nd y, bigger number = shorter bars
-                    Into::<ShapeStyle>::into(&GREEN).filled(),
+                    Into::<ShapeStyle>::into(&custom_color).filled(),
                 ))?
             }
         },
@@ -462,16 +474,31 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
                 } else {
                     y_adj = (y + z_line_offset).round() as i32;
                 }
-                //println!("bottom line: {BOTTOM_LINE_Y}  Bar length: {y}  zero line: {z_line_offset}  y_adj: {y_adj}");
+                let custom_color = get_cool_colors(tmp);
                 dwg.draw(&Rectangle::new(
                     [(x, BOTTOM_LINE_Y - 2), (x+30, BOTTOM_LINE_Y - y_adj)], //2nd y, bigger number = shorter bars
-                    Into::<ShapeStyle>::into(&GREEN).filled(),
+                    Into::<ShapeStyle>::into(&custom_color).filled(),
                 ))?;
             }
         },
         _ => println!("Unknown Period"),
     }
     Ok(())    
+}
+fn get_cool_colors(temp: i32) -> RGBColor {
+    if temp <= 0 { //DarkBlue 
+        RGBColor(0,0,139) 
+    } else if temp > 0 && temp <= 25 { // Purple
+        RGBColor(128, 0, 128) 
+    } else if temp > 25 && temp <= 50 { // SaddleBrown
+        RGBColor(139, 69, 19) 
+    } else if temp > 50 && temp <= 75 { // ForestGreen
+        RGBColor(34, 139, 34) 
+    } else if temp > 75 && temp <= 100 { // DarkGoldenRod
+        RGBColor(184, 134, 11) 
+    } else {
+        RGBColor(50, 205, 50)  // HotPink
+    }
 }
 
 fn draw_axes(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
@@ -767,13 +794,3 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     Ok(())
 }
 
-/*    
-    let mperiod = "Month"; // periods can be Month, Week, or Fort
-    let wperiod = "Week"; 
-    let fperiod = "Fort"; 
-    let mcity_period = format!("{the_city}_{mperiod}");
-    let wcity_period = format!("{the_city}_{wperiod}");
-    let fcity_period = format!("{the_city}_{fperiod}");
-    let tmperiod = "tmonth"; // column names in selected db: can be tmonth, tfort, or tweek
-    let twperiod = "tweek"; 
-    let tfperiod = "tfort";  */
