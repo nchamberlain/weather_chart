@@ -393,16 +393,14 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
     Ok(())
 }
 fn get_warm_colors(temp: i32) -> RGBColor {
-    if temp <= 0 { // DodgerBlue
+    if temp <= 32 { // DodgerBlue
         RGBColor(30, 144, 255) 
-    } else if temp > 0 && temp <= 25 { // BlueViolet
-        RGBColor(138, 43, 226) 
-    } else if temp > 25 && temp <= 50 { // OliveDrab
-        RGBColor(107, 142, 35) 
-    } else if temp > 50 && temp <= 75 { // MediumSpringGreen
-        RGBColor(0, 250, 154)
-    } else if temp > 75 && temp <= 100 { // Orange 
-        RGBColor(255, 165, 0) 
+    } else if temp > 32 && temp <= 60 { // Tan
+        RGBColor(210, 180, 140) 
+    } else if temp > 60 && temp <= 80 { // MediumSpringGreen
+        RGBColor(0, 250, 154) 
+    } else if temp > 80 && temp <= 100 { // Orange
+        RGBColor(255, 165, 0)
     } else {
         RGBColor(255, 0, 0) // Red
     }
@@ -486,16 +484,14 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
     Ok(())    
 }
 fn get_cool_colors(temp: i32) -> RGBColor {
-    if temp <= 0 { //DarkBlue 
+    if temp <= 32 { //DarkBlue 
         RGBColor(0,0,139) 
-    } else if temp > 0 && temp <= 25 { // Purple
-        RGBColor(128, 0, 128) 
-    } else if temp > 25 && temp <= 50 { // SaddleBrown
+    } else if temp > 32 && temp <= 60 { // SaddleBrown
         RGBColor(139, 69, 19) 
-    } else if temp > 50 && temp <= 75 { // ForestGreen
+    } else if temp > 60 && temp <= 80 { // ForestGreen
         RGBColor(34, 139, 34) 
-    } else if temp > 75 && temp <= 100 { // DarkGoldenRod
-        RGBColor(184, 134, 11) 
+    } else if temp > 80 && temp <= 100 { // RosyBrown
+        RGBColor(188, 143, 143) 
     } else {
         RGBColor(50, 205, 50)  // HotPink
     }
