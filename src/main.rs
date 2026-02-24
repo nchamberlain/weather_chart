@@ -245,6 +245,9 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
         // Draw horizontal and verticlal grid lines with tick marks
         draw_grids(&mdwg).expect("Failed to draw grids");
 
+        // Draw legend
+        draw_legend(&mdwg).expect("Failed to draw legend");
+
         // Draw title
         draw_title(&mdwg, &mtitle_text, title_style.clone()).expect("Failed to draw title");
 
@@ -270,6 +273,9 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
         
         // Draw horizontal and verticlal grid lines with tick marks
         draw_grids(&wdwg).expect("Failed to draw grids");
+
+        // Draw legend
+        draw_legend(&wdwg).expect("Failed to draw legend");
 
         // Draw title
         draw_title(&wdwg, &wtitle_text, title_style.clone()).expect("Failed to draw title");
@@ -297,6 +303,9 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
         // Draw horizontal and verticlal grid lines with tick marks
         draw_grids(&fdwg).expect("Failed to draw grids");
 
+        // Draw legend
+        draw_legend(&fdwg).expect("Failed to draw legend");
+
         // Draw title
         draw_title(&fdwg, &ftitle_text, title_style.clone()).expect("Failed to draw title");
 
@@ -316,6 +325,44 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
     }
     Ok(())
 }
+
+fn draw_legend(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
+    let legend_x = LEFT_MARGIN + AXIS_WIDTH - 120;
+    let legend_y = TOP_MARGIN + 12;
+    let rect_size = 20;
+    let spacing = 30;
+
+    // Draw legend boxes and labels
+    let warm_colors = vec![
+        (get_warm_colors(110), "100+°F"),
+        (get_warm_colors(90), "81-100°F"),
+        (get_warm_colors(70), "61-80°F"),
+        (get_warm_colors(50), "33-60°F"),
+        (get_warm_colors(30), "<= 32°F"),
+    ];
+
+    // Draw legend background
+    dwg.draw(&Rectangle::new(
+        [(legend_x - 10, legend_y - 10), (legend_x + rect_size + 98, legend_y + (spacing * warm_colors.len() as i32))],
+        Into::<ShapeStyle>::into(&WHITE).filled(),
+    ))?;
+    // Draw box around legend
+    dwg.draw(&Rectangle::new(
+        [(legend_x - 10, legend_y - 10), (legend_x + rect_size + 98, legend_y + (spacing * warm_colors.len() as i32))],
+        Into::<ShapeStyle>::into(&BLACK).stroke_width(2),
+    ))?;
+    //draw the legend boxes and labels
+    for (i, (color, label)) in warm_colors.iter().enumerate() {
+        let y_offset = i as i32 * spacing;
+        dwg.draw(&Rectangle::new(
+            [(legend_x, legend_y + y_offset), (legend_x + rect_size, legend_y + rect_size + y_offset)],
+            Into::<ShapeStyle>::into(color).filled(),
+        ))?;
+        dwg.draw_text(label, &("sans-serif", 16).into_font().color(&BLACK), (legend_x + rect_size + 10, legend_y + rect_size / 2 + y_offset-3))?;
+    }
+    Ok(())
+}
+
 fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_offset: f64,  pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>> {
     let mut y_adj: i32;
     match period {
