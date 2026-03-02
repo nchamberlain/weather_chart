@@ -56,14 +56,12 @@ fn get_db_action() -> Result<(), sqlx::Error>{
             list_all_cities().expect("Failed to list all cities");
         } 
           else if select == "Generate Avgs Charts by CITY" {
-            println!("Generating Avgs Charts by CITY - UNDER CONSTRUCTION");
             generate_averages_by_city().expect("Failed to generate averages charts by city");
         }
           else if select == "Print Avgs Charts by YEAR" {
-            println!("Print Avgs Charts by YEAR - UNDER CONSTRUCTION");
+            println!("Generate Avgs Charts by YEAR - UNDER CONSTRUCTION");
         }
           else if select == "Generate Videos from Charts" {
-            println!("Generating Videos from Charts - UNDER CONSTRUCTION");
             generate_videos_by_city().expect("Failed to generate videos from charts");
         }  else
         if select == "Exit" {
@@ -75,7 +73,7 @@ fn get_db_action() -> Result<(), sqlx::Error>{
 }
 //    =======================================================================
 #[tokio::main] 
-async fn list_all_cities() -> Result<(), sqlx::Error> {
+async fn list_all_cities() -> Result<(), sqlx::Error> { 
     // get the db env info from .env file
     dotenv().ok();
     // Set up the database URL from environment variable
@@ -100,7 +98,7 @@ async fn list_all_cities() -> Result<(), sqlx::Error> {
     Ok(())
 }
 async fn list_cities(pool: &Pool<MySql>) -> Result<Vec<MySqlRow>, sqlx::Error> {
-    let query_string = format!("SELECT name_of_city FROM city_names"); 
+    let query_string = format!("SELECT name_of_city FROM city_names ORDER by name_of_city asc;"); 
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
         .fetch_all(pool)
         .await?; 
@@ -109,30 +107,29 @@ async fn list_cities(pool: &Pool<MySql>) -> Result<Vec<MySqlRow>, sqlx::Error> {
 //    =======================================================================
 #[tokio::main]
 async fn generate_averages_by_city() -> Result<(), sqlx::Error> {
-    let cities = vec![
-        "Berkeley_CA",
-        "Billings_MT",
-        "Bismarck_ND",
-        "Chicago_IL",
-        "Columbus_OH",
-        "Dallas_TX",
-        "Fairbanks_AK",
-        "Houston_TX",
-        "Indianapolis_IN",
-        "Jacksonville_FL",
-        "Los_Angeles_CA" ,
-        "Minneapolis_MN",
-        "Nashville_TN",
-        "New_York_NY",
-        "Oklahoma_OK",
-        "Philadelphia_PA",
-        "Phoenix_AZ",
-        "San_Antonio_TX",
-        "San_Diego_CA",
-        "San_Francisco_CA",
-        "Seattle_WA",
-        "Spokane_WA",
-    ];
+    // get the db env info from .env file
+    dotenv().ok();
+    // Set up the database URL from environment variable
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    // Create a connection pool
+    let pool: Pool<MySql> = MySqlPoolOptions::new()
+        .max_connections(5) // Set the maximum number of connections
+        .connect(&database_url)
+        .await?;
+
+    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities(&pool).await;
+    let mut cities: Vec<String> = Vec::new();
+    
+    match city_list_result {
+        Ok(_) => { //probably only returns Ok if it found something. otherwise it would return err, no empty check
+            let city_list = city_list_result.unwrap();
+            for a_city in city_list {
+                let c_name: String = a_city.get("name_of_city");
+                cities.push(c_name);
+            }
+        },
+        Err(e) => eprint!("Cities not found, {} ", e),
+    }   
 
     let prompt_message = "Please select the cities to GENERATE averages charts".blue();
     let selected_cities = inquire::MultiSelect::new(&prompt_message, cities)
@@ -140,8 +137,8 @@ async fn generate_averages_by_city() -> Result<(), sqlx::Error> {
         .expect("Failed to select cities");
 
     for the_city in selected_cities {
-        println!("Generating averages charts for city of {0}", the_city.red());
-        generate_city_averages_charts(the_city).await?;    
+        println!("Generating averages charts for city of {0}", the_city.clone().red());
+        generate_city_averages_charts(&the_city).await?;    
     }
 
 // ------------------------------------------------------------------
@@ -710,30 +707,29 @@ async fn get_last_year(pool: &Pool<MySql>, city: &str) -> Result<Vec<MySqlRow>, 
 
 #[tokio::main]
 async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
-    let cities = vec![
-        "Berkeley_CA",
-        "Billings_MT",
-        "Bismarck_ND",
-        "Chicago_IL",
-        "Columbus_OH",
-        "Dallas_TX",
-        "Fairbanks_AK",
-        "Houston_TX",
-        "Indianapolis_IN",
-        "Jacksonville_FL",
-        "Los_Angeles_CA" ,
-        "Minneapolis_MN",
-        "Nashville_TN",
-        "New_York_NY",
-        "Oklahoma_OK",
-        "Philadelphia_PA",
-        "Phoenix_AZ",
-        "San_Antonio_TX",
-        "San_Diego_CA",
-        "San_Francisco_CA",
-        "Seattle_WA",
-        "Spokane_WA",
-    ];
+    // get the db env info from .env file
+    dotenv().ok();
+    // Set up the database URL from environment variable
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    // Create a connection pool
+    let pool: Pool<MySql> = MySqlPoolOptions::new()
+        .max_connections(5) // Set the maximum number of connections
+        .connect(&database_url)
+        .await?;
+
+    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities(&pool).await;
+    let mut cities: Vec<String> = Vec::new();
+    
+    match city_list_result {
+        Ok(_) => { //probably only returns Ok if it found something. otherwise it would return err, no empty check
+            let city_list = city_list_result.unwrap();
+            for a_city in city_list {
+                let c_name: String = a_city.get("name_of_city");
+                cities.push(c_name);
+            }
+        },
+        Err(e) => eprint!("Cities not found, {} ", e),
+    }   
 
     let prompt_message = "Please select the cities to GENERATE videos".blue();
     let selected_cities = inquire::MultiSelect::new(&prompt_message, cities)
@@ -741,8 +737,8 @@ async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
         .expect("Failed to select cities");
 
     for the_city in selected_cities {
-        println!("Generating videos for city of {0}", the_city.red());
-        generate_videos_from_charts(the_city).await?;    
+        println!("Generating videos for city of {0}", the_city.clone().red());
+        generate_videos_from_charts(&the_city).await?;    
     }
     Ok(())
 }
@@ -774,7 +770,9 @@ async fn generate_videos_from_charts(the_city: &str) -> Result<(), sqlx::Error> 
     println!("First year: {first_year}  for City: {the_city}"); 
     // let mut last_year: i32 = 0; // videos will be gen'd for every year after first year so last not needed here
     
-    let mut fps = 2;
+    let mut fps = 1;
+    let _ = generate_videos(the_city, first_year, fps);
+    fps = 2;
     let _ = generate_videos(the_city, first_year, fps);
     fps = 4;
     let _ = generate_videos(the_city, first_year, fps);
@@ -836,4 +834,3 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
 
     Ok(())
 }
-
