@@ -260,7 +260,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
             }
             Err(e) => eprintln!("Error getting temperatures from db: {}", e),
         }
-        mdwg.present().expect("Failed Chart drawing");
+        mdwg.present().expect("Failed monthly Chart drawing");
         // ----------- wweekly chart ------------------------------------------------------
         let wdwg = BitMapBackend::new(&wfile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
         wdwg.fill(&WHITE).expect("Failed to fill dwg"); //this automatically makes a rectangle size of drawing area and fills it with white
@@ -289,7 +289,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
             }
             Err(e) => eprintln!("Error getting temperatures from db: {}", e),
         }
-        wdwg.present().expect("Failed Chart drawing");
+        wdwg.present().expect("Failed weekly Chart drawing");
         // ----------- fortnightly chart ------------------------------------------------------
         let fdwg = BitMapBackend::new(&ffile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
         fdwg.fill(&WHITE).expect("Failed to fill dwg"); //this automatically makes a rectangle size of drawing area and fills it with white
@@ -318,44 +318,55 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
             }
             Err(e) => eprintln!("Error getting temperatures from db: {}", e),
         }
-        fdwg.present().expect("Failed Chart drawing");
+        fdwg.present().expect("Failed fortnight Chart drawing");
     }
     Ok(())
 }
 
 fn draw_legend(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
-    let legend_x = LEFT_MARGIN + AXIS_WIDTH - 120;
+    let legend_x = LEFT_MARGIN + AXIS_WIDTH - 150;
     let legend_y = TOP_MARGIN + 12;
     let rect_size = 20;
     let spacing = 30;
 
-    // Draw legend boxes and labels
-    let warm_colors = vec![
+    // Prepare boxes and labels for legend
+    /*let warm_colors = vec![
         (get_warm_colors(110), "100+°F"),
         (get_warm_colors(90), "81-100°F"),
         (get_warm_colors(70), "61-80°F"),
         (get_warm_colors(50), "33-60°F"),
         (get_warm_colors(30), "<= 32°F"),
+    ];*/
+    let temperature_colors: Vec<(RGBColor, RGBColor, &str)> = vec![
+        (get_cool_colors(110), get_warm_colors(110), "100+°F low hi"),
+        (get_cool_colors(90), get_warm_colors(90), "81-100°F low hi"),
+        (get_cool_colors(70), get_warm_colors(70), "61-80°F low hi"),
+        (get_cool_colors(50), get_warm_colors(50), "33-60°F low hi"),
+        (get_cool_colors(30), get_warm_colors(30), "<= 32°F low hi"),
     ];
 
     // Draw legend background
     dwg.draw(&Rectangle::new(
-        [(legend_x - 10, legend_y - 10), (legend_x + rect_size + 98, legend_y + (spacing * warm_colors.len() as i32))],
+        [(legend_x - 10, legend_y - 10), (legend_x + rect_size + 128, legend_y + (spacing * temperature_colors.len() as i32))],
         Into::<ShapeStyle>::into(&WHITE).filled(),
     ))?;
     // Draw box around legend
     dwg.draw(&Rectangle::new(
-        [(legend_x - 10, legend_y - 10), (legend_x + rect_size + 98, legend_y + (spacing * warm_colors.len() as i32))],
+        [(legend_x - 10, legend_y - 10), (legend_x + rect_size + 128, legend_y + (spacing * temperature_colors.len() as i32))],
         Into::<ShapeStyle>::into(&BLACK).stroke_width(2),
     ))?;
     //draw the legend boxes and labels
-    for (i, (color, label)) in warm_colors.iter().enumerate() {
+    for (i, (colorc,color, label)) in temperature_colors.iter().enumerate() {
         let y_offset = i as i32 * spacing;
         dwg.draw(&Rectangle::new(
             [(legend_x, legend_y + y_offset), (legend_x + rect_size, legend_y + rect_size + y_offset)],
+            Into::<ShapeStyle>::into(colorc).filled(),
+        ))?;
+        dwg.draw(&Rectangle::new(
+            [(legend_x + rect_size +5, legend_y + y_offset), (legend_x + rect_size + rect_size + 5, legend_y + rect_size + y_offset)],
             Into::<ShapeStyle>::into(color).filled(),
         ))?;
-        dwg.draw_text(label, &("sans-serif", 16).into_font().color(&BLACK), (legend_x + rect_size + 10, legend_y + rect_size / 2 + y_offset-3))?;
+        dwg.draw_text(label, &("sans-serif", 16).into_font().color(&BLACK), (legend_x + rect_size  + rect_size + 15, legend_y + rect_size / 2 + y_offset-3))?;
     }
     Ok(())
 }
@@ -534,10 +545,10 @@ fn get_cool_colors(temp: i32) -> RGBColor {
         RGBColor(139, 69, 19) 
     } else if temp > 60 && temp <= 80 { // ForestGreen
         RGBColor(34, 139, 34) 
-    } else if temp > 80 && temp <= 100 { // RosyBrown
-        RGBColor(188, 143, 143) 
+    } else if temp > 80 && temp <= 100 { // Burnt Orange
+        RGBColor(204,85,0) 
     } else {
-        RGBColor(50, 205, 50)  // HotPink
+        RGBColor(139,0,0)  // Dark Red
     }
 }
 
@@ -795,7 +806,7 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     cmd.arg(output_arg);
 
     println!("Executing command: {:?}", cmd);
-    let mut output = cmd.execute_output().unwrap();
+    let _ = cmd.execute_output().unwrap();
 
     period = "week";
     //let frames_per_second = fps.to_string();
@@ -808,7 +819,7 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     cmd2.arg(&output_arg);
 
     println!("Executing command: {:?}", cmd2);
-    output = cmd2.execute_output().unwrap();
+    let _ = cmd2.execute_output().unwrap();
 
     period = "fort";
     //let frames_per_second = fps.to_string();
@@ -821,7 +832,7 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     cmd3.arg(&output_arg);
 
     println!("Executing command: {:?}", cmd3);
-    output = cmd3.execute_output().unwrap();
+    let output = cmd3.execute_output().unwrap();
 
 
     if let Some(exit_code) = output.status.code() {
