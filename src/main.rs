@@ -5,8 +5,18 @@ use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, MySql, Pool, Row};
 use dotenvy::dotenv;
 use std::env;
 use std::io::{self, Write};
+use std::sync::OnceLock;
 use plotters::prelude::*;
 use plotters::coord::Shift;
+
+//statics for db connection pooling. This allows us to create a single pool that 
+//can be shared across multiple functions without having to pass it around as an argument. 
+//The OnceLock ensures that the pool is only initialized once and is thread-safe.
+static DB_POOL: OnceLock<Pool<MySql>> = OnceLock::new();
+//fn get_db_pool() -> &'static Pool<MySql> {
+//    DB_POOL.get().expect("Database pool not initialized")
+//}
+static DB_URL: OnceLock<String> = OnceLock::new();
 
 // constants used when generating charts
 const TOP_MARGIN: i32 = 60;
@@ -31,15 +41,30 @@ const START_NUMBER: &str = "-start_number";  //start_year = first_year
 const FRAMERATE: &str = "-framerate";
 const OVERWRITE: &str = "-y";
 
-fn main()  {
-    let _ = get_db_action();
+
+#[tokio::main]
+async fn main() -> Result<(), sqlx::Error> {
+    // initialize the database pool just once and share it across all functions. 
+    //This is more efficient than creating a new pool for each function call. 
+    //The pool will manage the connections and reuse them as needed.
+    dotenv().ok();
+        
+    DB_URL.get_or_init(|| env::var("DATABASE_URL").expect("DATABASE_URL must be set"));
+    DB_POOL.set(MySqlPoolOptions::new()
+        .max_connections(5) // Set the maximum number of connections
+        .connect(&DB_URL.get().expect("Database URL not initialized"))
+        .await?)
+        .expect("Failed to initialize database pool");
+
+    let result = get_user_choice();
+    Ok((result.await)?)
 }
 
-fn get_db_action() -> Result<(), sqlx::Error>{
+async fn get_user_choice() -> Result<(), sqlx::Error>{
     let choices = vec![
         "List all cities",
-        "Generate Avgs Charts by CITY",
-        "Print Avgs Charts by YEAR",
+        "Generate BAR Charts by CITY",
+        "Generate LINE Charts by CITY",
         "Generate Videos from Charts",
         "Exit",
     ];
@@ -53,16 +78,16 @@ fn get_db_action() -> Result<(), sqlx::Error>{
         // each selected action calls a separate tokio runtime so the must each be marked with #[tokio::main]
         if select == "List all cities" {
             println!("Listing all cities...");
-            list_all_cities().expect("Failed to list all cities");
+            list_all_cities().await.expect("Failed to list all cities");
         } 
-          else if select == "Generate Avgs Charts by CITY" {
-            generate_averages_by_city().expect("Failed to generate averages charts by city");
+          else if select == "Generate BAR Charts by CITY" {
+            generate_averages_by_city().await.expect("Failed to generate averages charts by city");
         }
-          else if select == "Print Avgs Charts by YEAR" {
-            println!("Generate Avgs Charts by YEAR - UNDER CONSTRUCTION");
+          else if select == "Generate LINE Charts by CITY" {
+            println!("Generate LINE Charts by CITY - UNDER CONSTRUCTION");
         }
           else if select == "Generate Videos from Charts" {
-            generate_videos_by_city().expect("Failed to generate videos from charts");
+            generate_videos_by_city().await.expect("Failed to generate videos from charts");
         }  else
         if select == "Exit" {
             println!("Exiting the program. Goodbye!");
@@ -72,19 +97,8 @@ fn get_db_action() -> Result<(), sqlx::Error>{
     Ok(())
 }
 //    =======================================================================
-#[tokio::main] 
 async fn list_all_cities() -> Result<(), sqlx::Error> { 
-    // get the db env info from .env file
-    dotenv().ok();
-    // Set up the database URL from environment variable
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // Create a connection pool
-    let pool: Pool<MySql> = MySqlPoolOptions::new()
-        .max_connections(5) // Set the maximum number of connections
-        .connect(&database_url)
-        .await?;
-
-    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities(&pool).await;
+    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities().await;
     match city_list_result {
         Ok(_) => { //probably only returns Ok if it found something. otherwise it would return err, no empty check
             let city_list = city_list_result.unwrap();
@@ -95,29 +109,18 @@ async fn list_all_cities() -> Result<(), sqlx::Error> {
         },
         Err(e) => eprint!("Cities not found, {} ", e),
     }   
+    println!("Listed names of the cities in city_names table in database: {:?}", DB_URL);
     Ok(())
 }
-async fn list_cities(pool: &Pool<MySql>) -> Result<Vec<MySqlRow>, sqlx::Error> {
+async fn list_cities() -> Result<Vec<MySqlRow>, sqlx::Error> {
     let query_string = format!("SELECT name_of_city FROM city_names ORDER by name_of_city asc;"); 
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
-        .fetch_all(pool)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await?; 
     Ok(rows)
 }
-//    =======================================================================
-#[tokio::main]
 async fn generate_averages_by_city() -> Result<(), sqlx::Error> {
-    // get the db env info from .env file
-    dotenv().ok();
-    // Set up the database URL from environment variable
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // Create a connection pool
-    let pool: Pool<MySql> = MySqlPoolOptions::new()
-        .max_connections(5) // Set the maximum number of connections
-        .connect(&database_url)
-        .await?;
-
-    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities(&pool).await;
+    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities().await;
     let mut cities: Vec<String> = Vec::new();
     
     match city_list_result {
@@ -140,27 +143,13 @@ async fn generate_averages_by_city() -> Result<(), sqlx::Error> {
         println!("Generating averages charts for city of {0}", the_city.clone().red());
         generate_city_averages_charts(&the_city).await?;    
     }
-
-// ------------------------------------------------------------------
     Ok(())
 }
-
 async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error> {
-    // get the db env info from .env file
-    dotenv().ok();
-    // Set up the database URL from environment variable
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // Create a connection pool
-    let pool: Pool<MySql> = MySqlPoolOptions::new()
-        .max_connections(5) // Set the maximum number of connections
-        .connect(&database_url)
-        .await?;
-
     let city  = the_city;
-
     let city_low: i32;
     let city_high: i32;   
-    let fn_get_min_max: Result<(i32, i32), sqlx::Error> = get_city_min_max(&pool, city).await;
+    let fn_get_min_max: Result<(i32, i32), sqlx::Error> = get_city_min_max(city).await;
     match fn_get_min_max { // city_low & city_high here must be initialized in this block to make compiler happy
         Ok(_) => {let min_max: &(i32, i32) = &fn_get_min_max.unwrap();
                 city_low = min_max.0;  city_high = min_max.1; println!("Low: {city_low}  High: {city_high}")},
@@ -168,7 +157,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
     }  
 
     let mut first_year: i32 = 0; 
-    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(&pool, city).await;
+    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(city).await;
     match first_year_result {
         Ok(_) => { 
             let first_year_row = &first_year_result.unwrap(); //unwrap the row
@@ -180,7 +169,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
     } 
     println!("First year: {first_year}  City: {city}"); 
     let mut last_year: i32 = 0; 
-    let last_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_last_year(&pool, city).await;
+    let last_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_last_year(city).await;
     match last_year_result {
         Ok(_) => { 
             let last_year_row = &last_year_result.unwrap(); //unwrap the row
@@ -251,7 +240,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
         // Draw axis labels
         draw_axis_labels(&mdwg, x_axis_style.clone(), y_axis_style.clone(), mperiod, y_lowest, y_highest, y_range).expect("Failed to draw axis labels");
 
-        let fn_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_temps(&pool, tmperiod, &mcity_period, the_year).await;
+        let fn_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_temps(tmperiod, &mcity_period, the_year).await;
         match fn_result {
             Ok(_) => { 
                 //print_avgs(period, &city_period, the_year, &fn_result.as_ref().unwrap());
@@ -280,7 +269,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
         // Draw axis labels
         draw_axis_labels(&wdwg, x_axis_style.clone(), y_axis_style.clone(), wperiod, y_lowest, y_highest, y_range).expect("Failed to draw axis labels");
 
-        let fn_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_temps(&pool, twperiod, &wcity_period, the_year).await;
+        let fn_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_temps(twperiod, &wcity_period, the_year).await;
         match fn_result {
             Ok(_) => { 
                 //print_avgs(period, &city_period, the_year, &fn_result.as_ref().unwrap());
@@ -309,7 +298,7 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
         // Draw axis labels
         draw_axis_labels(&fdwg, x_axis_style.clone(), y_axis_style.clone(), fperiod, y_lowest, y_highest, y_range).expect("Failed to draw axis labels");
 
-        let fn_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_temps(&pool, tfperiod, &fcity_period, the_year).await;
+        let fn_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_temps(tfperiod, &fcity_period, the_year).await;
         match fn_result {
             Ok(_) => { 
                 //print_avgs(period, &city_period, the_year, &fn_result.as_ref().unwrap());
@@ -322,21 +311,12 @@ async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error
     }
     Ok(())
 }
-
 fn draw_legend(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
     let legend_x = LEFT_MARGIN + AXIS_WIDTH - 150;
     let legend_y = TOP_MARGIN + 12;
     let rect_size = 20;
     let spacing = 30;
 
-    // Prepare boxes and labels for legend
-    /*let warm_colors = vec![
-        (get_warm_colors(110), "100+°F"),
-        (get_warm_colors(90), "81-100°F"),
-        (get_warm_colors(70), "61-80°F"),
-        (get_warm_colors(50), "33-60°F"),
-        (get_warm_colors(30), "<= 32°F"),
-    ];*/
     let temperature_colors: Vec<(RGBColor, RGBColor, &str)> = vec![
         (get_cool_colors(110), get_warm_colors(110), "100+°F low hi"),
         (get_cool_colors(90), get_warm_colors(90), "81-100°F low hi"),
@@ -370,7 +350,6 @@ fn draw_legend(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn st
     }
     Ok(())
 }
-
 fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_offset: f64,  pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>> {
     let mut y_adj: i32;
     match period {
@@ -551,7 +530,6 @@ fn get_cool_colors(temp: i32) -> RGBColor {
         RGBColor(139,0,0)  // Dark Red
     }
 }
-
 fn draw_axes(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
     // Draw axis lines on the drawing area
     dwg.draw(&PathElement::new( //draw y axis
@@ -564,7 +542,6 @@ fn draw_axes(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std:
     ))?;  
     Ok(())  
 }
-
 fn draw_grids(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
     // Draw 4 vertical grid lines
     for i in 1..5 { 
@@ -610,7 +587,6 @@ fn draw_grids(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std
     }
     Ok(())
 }
-
 fn draw_title(dwg: &DrawingArea<BitMapBackend, Shift>, title_text: &str, title_style: TextStyle) -> Result<(), Box<dyn std::error::Error>> {
     let (title_width, title_height) = dwg.estimate_text_size(&title_text, &title_style)?;
     
@@ -619,7 +595,6 @@ fn draw_title(dwg: &DrawingArea<BitMapBackend, Shift>, title_text: &str, title_s
     )?; 
     Ok(())
 }
-
 fn draw_axis_labels(dwg: &DrawingArea<BitMapBackend, Shift>,
                          x_axis_style: TextStyle, 
                          y_axis_style: TextStyle, 
@@ -682,10 +657,10 @@ fn draw_axis_labels(dwg: &DrawingArea<BitMapBackend, Shift>,
     }
     Ok(())
 }
-async fn get_city_min_max(pool: &Pool<MySql>, city: &str) -> Result<(i32, i32), sqlx::Error> {
+async fn get_city_min_max(city: &str) -> Result<(i32, i32), sqlx::Error> {
     let query_string = format!("SELECT min_temp, max_temp FROM city_names WHERE name_of_city = '{}'", city); // Adjust table name as needed
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
-        .fetch_all(pool)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await?; // had to make this function return a Result to use the ? operator
 
     let lo: i32 = rows[0].get(0);
@@ -693,42 +668,29 @@ async fn get_city_min_max(pool: &Pool<MySql>, city: &str) -> Result<(i32, i32), 
 
     Ok((lo, hi))
 }
-
-async fn get_temps(pool: &Pool<MySql>, tperiod: &str, city: &str, year: i32) -> Result<Vec<MySqlRow>, sqlx::Error> {
+async fn get_temps(tperiod: &str, city: &str, year: i32) -> Result<Vec<MySqlRow>, sqlx::Error> {
     let query_string = format!("SELECT tyear, {}, tmax, tmin FROM {} WHERE tyear = {}", tperiod, city, year ); // Adjust table name as needed
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
-        .fetch_all(pool)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await?; // had to make this function return a Result to use the ? operator
     Ok(rows)
 }
-async fn get_first_year(pool: &Pool<MySql>, city: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
+async fn get_first_year(city: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
     let query_string = format!("SELECT tdate FROM {} ORDER BY tdate ASC LIMIT 1", city); // Adjust table name as needed
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
-        .fetch_all(pool)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await?; // had to make this function return a Result to use the ? operator
     Ok(rows)
 }
-async fn get_last_year(pool: &Pool<MySql>, city: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
+async fn get_last_year(city: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
     let query_string = format!("SELECT tdate FROM {} ORDER BY tdate DESC LIMIT 1", city); // Adjust table name as needed
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
-        .fetch_all(pool)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await?; // had to make this function return a Result to use the ? operator
     Ok(rows)
 }
-
-#[tokio::main]
 async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
-    // get the db env info from .env file
-    dotenv().ok();
-    // Set up the database URL from environment variable
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // Create a connection pool
-    let pool: Pool<MySql> = MySqlPoolOptions::new()
-        .max_connections(5) // Set the maximum number of connections
-        .connect(&database_url)
-        .await?;
-
-    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities(&pool).await;
+    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities().await;
     let mut cities: Vec<String> = Vec::new();
     
     match city_list_result {
@@ -753,22 +715,10 @@ async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
     }
     Ok(())
 }
-
 async fn generate_videos_from_charts(the_city: &str) -> Result<(), sqlx::Error> {
-    //let city  = the_city.to_string();
     println!("Generating videos for the city of {0}", the_city);
-    // get the db env info from .env file
-    dotenv().ok();
-    // Set up the database URL from environment variable
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // Create a connection pool
-    let pool: Pool<MySql> = MySqlPoolOptions::new()
-        .max_connections(5) // Set the maximum number of connections
-        .connect(&database_url)
-        .await?;
-
     let mut first_year: i32 = 0; 
-    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(&pool, the_city).await;
+    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(the_city).await;
     match first_year_result {
         Ok(_) => { 
             let first_year_row = &first_year_result.unwrap(); //unwrap the row
@@ -833,7 +783,6 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
 
     println!("Executing command: {:?}", cmd3);
     let output = cmd3.execute_output().unwrap();
-
 
     if let Some(exit_code) = output.status.code() {
         if exit_code == 0 {
