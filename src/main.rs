@@ -9,13 +9,10 @@ use std::sync::OnceLock;
 use plotters::prelude::*;
 use plotters::coord::Shift;
 
-//statics for db connection pooling. This allows us to create a single pool that 
+//use static for db connection pooling. This allows us to create a single pool that 
 //can be shared across multiple functions without having to pass it around as an argument. 
 //The OnceLock ensures that the pool is only initialized once and is thread-safe.
 static DB_POOL: OnceLock<Pool<MySql>> = OnceLock::new();
-//fn get_db_pool() -> &'static Pool<MySql> {
-//    DB_POOL.get().expect("Database pool not initialized")
-//}
 static DB_URL: OnceLock<String> = OnceLock::new();
 
 // constants used when generating charts
@@ -40,7 +37,6 @@ const HIDE_BANNER: &str = "-hide_banner";
 const START_NUMBER: &str = "-start_number";  //start_year = first_year
 const FRAMERATE: &str = "-framerate";
 const OVERWRITE: &str = "-y";
-
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
@@ -77,11 +73,11 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
 
         // each selected action calls a separate tokio runtime so the must each be marked with #[tokio::main]
         if select == "List all cities" {
-            println!("Listing all cities...");
+            //println!("Listing all cities...");
             list_all_cities().await.expect("Failed to list all cities");
         } 
           else if select == "Generate BAR Charts by CITY" {
-            generate_averages_by_city().await.expect("Failed to generate averages charts by city");
+            generate_bar_charts_by_city().await.expect("Failed to generate bar charts by city");
         }
           else if select == "Generate LINE Charts by CITY" {
             println!("Generate LINE Charts by CITY - UNDER CONSTRUCTION");
@@ -119,7 +115,7 @@ async fn list_cities() -> Result<Vec<MySqlRow>, sqlx::Error> {
         .await?; 
     Ok(rows)
 }
-async fn generate_averages_by_city() -> Result<(), sqlx::Error> {
+async fn select_cities(message: String) -> Vec<String> {
     let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities().await;
     let mut cities: Vec<String> = Vec::new();
     
@@ -134,52 +130,36 @@ async fn generate_averages_by_city() -> Result<(), sqlx::Error> {
         Err(e) => eprint!("Cities not found, {} ", e),
     }   
 
-    let prompt_message = "Please select the cities to GENERATE averages charts".blue();
+    let prompt_message = message.green();
     let selected_cities = inquire::MultiSelect::new(&prompt_message, cities)
         .prompt()
         .expect("Failed to select cities");
+    return selected_cities
+}
+async fn generate_bar_charts_by_city() -> Result<(), sqlx::Error> {
+    let selected_cities = select_cities("Please select the cities to generate Bar Charts".to_string()).await;
 
     for the_city in selected_cities {
-        println!("Generating averages charts for city of {0}", the_city.clone().red());
-        generate_city_averages_charts(&the_city).await?;    
+        println!("\nGenerating BAR charts for city of {0}", the_city.clone().red());
+        generate_city_bar_charts(&the_city).await?;    
     }
     Ok(())
 }
-async fn generate_city_averages_charts(the_city: &str) -> Result<(), sqlx::Error> {
+async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
     let city  = the_city;
     let city_low: i32;
     let city_high: i32;   
     let fn_get_min_max: Result<(i32, i32), sqlx::Error> = get_city_min_max(city).await;
     match fn_get_min_max { // city_low & city_high here must be initialized in this block to make compiler happy
         Ok(_) => {let min_max: &(i32, i32) = &fn_get_min_max.unwrap();
-                city_low = min_max.0;  city_high = min_max.1; println!("Low: {city_low}  High: {city_high}")},
+                city_low = min_max.0;  city_high = min_max.1; /*println!("Low: {city_low}  High: {city_high}")*/},
         Err(e) =>  {city_low = 0; city_high = 0; eprintln!("Error getting City min max: {}",e)}
     }  
+    //let mut first_year: i32 = 0; 
+    let first_year: i32 = get_1st_year(&the_city).await;
+    let last_year: i32 = get_end_year(&the_city).await;
 
-    let mut first_year: i32 = 0; 
-    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(city).await;
-    match first_year_result {
-        Ok(_) => { 
-            let first_year_row = &first_year_result.unwrap(); //unwrap the row
-            let first_year_str: &str = first_year_row[0].get("tdate"); //get date string, for ex. 2020-09-05
-            first_year = first_year_str[0..4].parse().unwrap();  //parse first 4 digits as an i32
-            println!("First year for {}: {}", city, &first_year);
-        },
-        Err(e) => eprintln!("Error executing function: {}", e),
-    } 
-    println!("First year: {first_year}  City: {city}"); 
-    let mut last_year: i32 = 0; 
-    let last_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_last_year(city).await;
-    match last_year_result {
-        Ok(_) => { 
-            let last_year_row = &last_year_result.unwrap(); //unwrap the row
-            let last_year_str: &str = last_year_row[0].get("tdate"); //get date string, for ex. 2020-11-21
-            last_year = last_year_str[0..4].parse().unwrap();  //parse first 4 digits as an i32
-            println!("Last year for {}: {}", city, &last_year);
-        },
-        Err(e) => eprintln!("Error executing function: {}", e),
-    } 
-
+    println!("City: {city} from {first_year} to {last_year}"); 
     // calc these here so available to the functions
     let y_lowest = city_low - 0; // can adjust chart min temp here 
     let y_highest = city_high + 0; //can adjust chart max temp
@@ -675,40 +655,38 @@ async fn get_temps(tperiod: &str, city: &str, year: i32) -> Result<Vec<MySqlRow>
         .await?; // had to make this function return a Result to use the ? operator
     Ok(rows)
 }
-async fn get_first_year(city: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
-    let query_string = format!("SELECT tdate FROM {} ORDER BY tdate ASC LIMIT 1", city); // Adjust table name as needed
-    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
+async fn get_1st_year(city: &str) -> i32{
+    let query_stmt_string = format!("SELECT tdate FROM {city} order by tdate asc limit 1");
+    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_stmt_string)
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
-        .await?; // had to make this function return a Result to use the ? operator
-    Ok(rows)
+        .await.expect("Failed to fetch first year");
+    match rows.len() {
+         0 => { eprintln!("No data found for city: {}", city); return 0; },
+         _ => {
+            let first_year_row = &rows[0]; //unwrap the row
+            let first_year_str: &str = first_year_row.get("tdate"); //get date string, for ex. 2020-09-05
+            let first_year = first_year_str[0..4].parse().unwrap();  //parse first 4 digits as an int
+            return first_year;
+        }
+    }
 }
-async fn get_last_year(city: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
-    let query_string = format!("SELECT tdate FROM {} ORDER BY tdate DESC LIMIT 1", city); // Adjust table name as needed
-    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
+async fn get_end_year(city: &str) -> i32 {
+    let query_stmt_string = format!("SELECT tdate FROM {city} order by tdate desc limit 1");
+    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_stmt_string)
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
-        .await?; // had to make this function return a Result to use the ? operator
-    Ok(rows)
+        .await.expect("Failed to fetch last year");
+    match rows.len() {
+         0 => { eprintln!("No data found for city: {}", city); return 0; },
+         _ => {
+            let last_year_row = &rows[0]; //unwrap the row
+            let last_year_str: &str = last_year_row.get("tdate"); //get date string, for ex. 2020-11-21
+            let last_year = last_year_str[0..4].parse().unwrap();  //parse first 4 digits as an int
+            return last_year;
+        }
+    }
 }
 async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
-    let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities().await;
-    let mut cities: Vec<String> = Vec::new();
-    
-    match city_list_result {
-        Ok(_) => { //probably only returns Ok if it found something. otherwise it would return err, no empty check
-            let city_list = city_list_result.unwrap();
-            for a_city in city_list {
-                let c_name: String = a_city.get("name_of_city");
-                cities.push(c_name);
-            }
-        },
-        Err(e) => eprint!("Cities not found, {} ", e),
-    }   
-
-    let prompt_message = "Please select the cities to GENERATE videos".blue();
-    let selected_cities = inquire::MultiSelect::new(&prompt_message, cities)
-        .prompt()
-        .expect("Failed to select cities");
-
+    let selected_cities = select_cities("Please select the cities to GENERATE videos".to_string()).await;
     for the_city in selected_cities {
         println!("Generating videos for city of {0}", the_city.clone().red());
         generate_videos_from_charts(&the_city).await?;    
@@ -716,20 +694,8 @@ async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
     Ok(())
 }
 async fn generate_videos_from_charts(the_city: &str) -> Result<(), sqlx::Error> {
-    println!("Generating videos for the city of {0}", the_city);
-    let mut first_year: i32 = 0; 
-    let first_year_result: Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> = get_first_year(the_city).await;
-    match first_year_result {
-        Ok(_) => { 
-            let first_year_row = &first_year_result.unwrap(); //unwrap the row
-            let first_year_str: &str = first_year_row[0].get("tdate"); //get date string, for ex. 2020-09-05
-            first_year = first_year_str[0..4].parse().unwrap();  //parse first 4 digits as an i32
-            //println!("First year for {}: {}", the_city, &first_year);
-        },
-        Err(e) => eprintln!("Error executing function: {}", e),
-    } 
-    println!("First year: {first_year}  for City: {the_city}"); 
-    // let mut last_year: i32 = 0; // videos will be gen'd for every year after first year so last not needed here
+    let first_year: i32 = get_1st_year(&the_city).await;
+    println!("Generating videos for the city of {0} starting in {1}", the_city, first_year);
     
     let mut fps = 1;
     let _ = generate_videos(the_city, first_year, fps);
