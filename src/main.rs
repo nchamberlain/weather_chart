@@ -9,8 +9,9 @@ use std::sync::OnceLock;
 use plotters::prelude::*;
 use plotters::coord::Shift;
 
-//use static for db connection pooling. This allows us to create a single pool that 
-//can be shared across multiple functions without having to pass it around as an argument. 
+//use static for db connection pooling to create a single pool that can be shared across 
+//multiple functions without having to pass it around as an argument. 
+
 //The OnceLock ensures that the pool is only initialized once and is thread-safe.
 static DB_POOL: OnceLock<Pool<MySql>> = OnceLock::new();
 static DB_URL: OnceLock<String> = OnceLock::new();
@@ -80,7 +81,8 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
             generate_bar_charts_by_city().await.expect("Failed to generate bar charts by city");
         }
           else if select == "Generate LINE Charts by CITY" {
-            println!("Generate LINE Charts by CITY - UNDER CONSTRUCTION");
+            //println!("Generate LINE Charts by CITY - UNDER CONSTRUCTION");
+            generate_line_charts_by_city().await.expect("Failed to generate line charts by city");
         }
           else if select == "Generate Videos from Charts" {
             generate_videos_by_city().await.expect("Failed to generate videos from charts");
@@ -758,5 +760,124 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
         }
     } 
 
+    Ok(())
+}
+
+async fn generate_line_charts_by_city() -> Result<(), sqlx::Error> {
+    let selected_cities = select_cities("Please select the cities to GENERATE videos".to_string()).await;
+    for the_city in selected_cities {
+        println!("Generating line charts for city of {0}", the_city.clone().red());
+        generate_line_charts(&the_city).await?;    
+    }
+    Ok(())
+}
+async fn generate_line_charts(the_city: &str) -> Result<(), sqlx::Error> {
+    let city  = the_city;
+    let city_low: i32;
+    let city_high: i32;   
+    let fn_get_min_max: Result<(i32, i32), sqlx::Error> = get_city_min_max(city).await;
+    match fn_get_min_max { // city_low & city_high here must be initialized in this block to make compiler happy
+        Ok(_) => {let min_max: &(i32, i32) = &fn_get_min_max.unwrap();
+                city_low = min_max.0;  city_high = min_max.1; /*println!("Low: {city_low}  High: {city_high}")*/},
+        Err(e) =>  {city_low = 0; city_high = 0; eprintln!("Error getting City min max: {}",e)}
+    }  
+    //let mut first_year: i32 = 0; 
+    let first_year: i32 = get_1st_year(&the_city).await;
+    let last_year: i32 = get_end_year(&the_city).await;
+
+    make_monthly_charts(city, first_year, last_year, city_low, city_high).await?;
+    make_fortly_charts(city, first_year, last_year, city_low, city_high).await?;
+    make_weekly_charts(city, first_year, last_year, city_low, city_high).await?;
+    Ok(())
+}
+async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
+    println!("Monthly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
+    let file_name = format!("charts/{}-{}-month.svg", city, first_year);
+    let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
+    let _ = root.fill(&WHITE);
+    //let _ = root.margin(20, 10, 10, 25);
+    let mut chart = ChartBuilder::on(&root)
+        .caption(format!("{} {} Monthly", first_year, city), ("sans-serif", 30).into_font())
+        .margin_top(20)
+        .margin_bottom(10)
+        .margin_left(10)
+        .margin_right(25)
+        .y_label_area_size(54)
+        .x_label_area_size(64)
+        .build_cartesian_2d((0..624).with_key_points(vec![0,52,104,156,208,260,312,364,416,468,520,572,624]), //624 = 24 * 26 or 12 * 52 
+         city_low..city_high
+        )
+        .unwrap();
+    let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
+    chart.configure_mesh()
+        .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
+        .y_label_style(("sans-serif", 20).into_font())
+        .x_label_style(("sans-serif", 20).into_font())
+        .x_label_formatter(&|x: &i32| x_labels[(x / 52).min(12) as usize].to_string())
+        .axis_desc_style(("sans-serif", 24).into_font())
+        .x_desc("Months of the Year")
+        .y_desc("Temperature (°F)")
+        .draw().unwrap();
+
+    Ok(())
+}
+async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
+    println!("Fortnightly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
+    let file_name = format!("charts/{}-{}-fort.svg", city, first_year);
+    let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
+    let _ = root.fill(&WHITE);
+    //let root = root.margin(20, 10, 10, 25);
+    let mut chart = ChartBuilder::on(&root)
+        .caption(format!("{} {} Fortnightly", first_year, city), ("sans-serif", 30).into_font())
+        .margin_top(20)
+        .margin_bottom(10)
+        .margin_left(10)
+        .margin_right(25)
+        .y_label_area_size(54)
+        .x_label_area_size(64)
+        .build_cartesian_2d((0..624).with_key_points(vec![0,52,104,156,208,260,312,364,416,468,520,572,624]), //624 = 24 * 26 or 12 * 52 
+         city_low..city_high
+        )
+        .unwrap();
+    let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
+    chart.configure_mesh()
+        .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
+        .y_label_style(("sans-serif", 20).into_font())
+        .x_label_style(("sans-serif", 20).into_font())
+        .x_label_formatter(&|x: &i32| x_labels[(x / 52).min(12) as usize].to_string())
+        .axis_desc_style(("sans-serif", 24).into_font())
+        .x_desc("Months of the Year")
+        .y_desc("Temperature (°F)")
+        .draw().unwrap();
+    Ok(())
+}
+async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
+    println!("Weekly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
+    let file_name = format!("charts/{}-{}-week.svg", city, first_year);
+    let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
+    let _ = root.fill(&WHITE);
+    //let root = root.margin(20, 10, 10, 25);
+    let mut chart = ChartBuilder::on(&root)
+        .caption(format!("{} {} Weekly", first_year, city), ("sans-serif", 30).into_font())
+        .margin_top(20)
+        .margin_bottom(10)
+        .margin_left(10)
+        .margin_right(25)
+        .y_label_area_size(54)
+        .x_label_area_size(64)
+        .build_cartesian_2d((0..624).with_key_points(vec![0,52,104,156,208,260,312,364,416,468,520,572,624]), //624 = 24 * 26 or 12 * 52 
+         city_low..city_high
+        )
+        .unwrap();
+    let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
+    chart.configure_mesh()
+        .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
+        .y_label_style(("sans-serif", 20).into_font())
+        .x_label_style(("sans-serif", 20).into_font())
+        .x_label_formatter(&|x: &i32| x_labels[(x / 52).min(12) as usize].to_string())
+        .axis_desc_style(("sans-serif", 24).into_font())
+        .x_desc("Months of the Year")
+        .y_desc("Temperature (°F)")
+        .draw().unwrap();
     Ok(())
 }
