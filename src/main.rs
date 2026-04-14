@@ -795,15 +795,15 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
     let file_name = format!("charts/{}-{}-month.svg", city, first_year);
     let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
     let _ = root.fill(&WHITE);
-    //let _ = root.margin(20, 10, 10, 25);
+    let title_city = city.to_string().replace("_", " ");
     let mut chart = ChartBuilder::on(&root)
-        .caption(format!("{} {} Monthly", first_year, city), ("sans-serif", 30).into_font())
+        .caption(format!("{} {} Average Monthly Temperatures", first_year, title_city), ("sans-serif", 36).into_font())
         .margin_top(20)
         .margin_bottom(10)
         .margin_left(10)
         .margin_right(25)
         .y_label_area_size(54)
-        .x_label_area_size(64)
+        .x_label_area_size(54)
         .build_cartesian_2d((0..624).with_key_points(vec![0,52,104,156,208,260,312,364,416,468,520,572,624]), //624 = 24 * 26 or 12 * 52 
          city_low..city_high
         )
@@ -815,10 +815,52 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
         .x_label_style(("sans-serif", 20).into_font())
         .x_label_formatter(&|x: &i32| x_labels[(x / 52).min(12) as usize].to_string())
         .axis_desc_style(("sans-serif", 24).into_font())
-        .x_desc("Months of the Year")
+        //.x_desc("Months of the Year")
         .y_desc("Temperature (°F)")
         .draw().unwrap();
 
+    //let tmperiod = "tmonth"; // column names in selected db: can be tmonth, tfort, or tweek
+    let city_period = format!("{city}_month");
+
+    let month_positions = [26, 78, 130, 182, 234, 286, 338, 390, 442, 494, 546, 598];
+    //LOOP first_year..last_year
+    let temp_result = get_temps("tmonth", &city_period, first_year).await?;
+
+    let hi_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmax").unwrap_or(0)).collect();
+    let lo_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmin").unwrap_or(0)).collect();
+
+    let high_vec: Vec<(i32, i32)> = month_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+    let low_vec: Vec<(i32, i32)> = month_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+
+    chart.draw_series(LineSeries::new(
+        high_vec.clone(),
+        &RED,
+    )).unwrap();
+    chart.draw_series(PointSeries::of_element(
+        high_vec,
+        2,
+        &RED,
+        &|c, s, st| {
+            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+        },
+    )).unwrap();
+
+    chart.draw_series(LineSeries::new(
+        low_vec.clone(),
+        &BLUE,
+    )).unwrap();
+    chart.draw_series(PointSeries::of_element(
+        low_vec,
+        2,
+        &BLUE,
+        &|c, s, st| {
+            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+        },
+    )).unwrap();
     Ok(())
 }
 async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
@@ -826,15 +868,15 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
     let file_name = format!("charts/{}-{}-fort.svg", city, first_year);
     let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
     let _ = root.fill(&WHITE);
-    //let root = root.margin(20, 10, 10, 25);
+    let title_city = city.to_string().replace("_", " ");
     let mut chart = ChartBuilder::on(&root)
-        .caption(format!("{} {} Fortnightly", first_year, city), ("sans-serif", 30).into_font())
+        .caption(format!("{} {} Average Fortnight Temperatures", first_year, title_city), ("sans-serif", 36).into_font())
         .margin_top(20)
         .margin_bottom(10)
         .margin_left(10)
         .margin_right(25)
         .y_label_area_size(54)
-        .x_label_area_size(64)
+        .x_label_area_size(54)
         .build_cartesian_2d((0..624).with_key_points(vec![0,52,104,156,208,260,312,364,416,468,520,572,624]), //624 = 24 * 26 or 12 * 52 
          city_low..city_high
         )
@@ -846,9 +888,50 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
         .x_label_style(("sans-serif", 20).into_font())
         .x_label_formatter(&|x: &i32| x_labels[(x / 52).min(12) as usize].to_string())
         .axis_desc_style(("sans-serif", 24).into_font())
-        .x_desc("Months of the Year")
+        //.x_desc("Months of the Year")
         .y_desc("Temperature (°F)")
         .draw().unwrap();
+
+    let city_period = format!("{}_fort", city);
+    let fort_positions  = [ 14,  38,  62,  86, 110, 134, 158, 182, 206, 230, 254, 278, 302, 
+                                      326, 350, 374, 398, 422, 446, 470, 494, 518, 542, 566, 590, 614];
+    let temp_result = get_temps("tfort", &city_period, first_year).await?;
+
+    let hi_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmax").unwrap_or(0)).collect();
+    let lo_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmin").unwrap_or(0)).collect();
+
+    let high_vec: Vec<(i32, i32)> = fort_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+    let low_vec: Vec<(i32, i32)> = fort_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+
+    chart.draw_series(LineSeries::new(
+        high_vec.clone(),
+        &RED,
+    )).unwrap();
+    chart.draw_series(PointSeries::of_element(
+        high_vec,
+        2,
+        &RED,
+        &|c, s, st| {
+            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+        },
+    )).unwrap();
+
+    chart.draw_series(LineSeries::new(
+        low_vec.clone(),
+        &BLUE,
+    )).unwrap();
+    chart.draw_series(PointSeries::of_element(
+        low_vec,
+        2,
+        &BLUE,
+        &|c, s, st| {
+            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+        },
+    )).unwrap();
     Ok(())
 }
 async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
@@ -856,15 +939,15 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
     let file_name = format!("charts/{}-{}-week.svg", city, first_year);
     let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
     let _ = root.fill(&WHITE);
-    //let root = root.margin(20, 10, 10, 25);
+    let title_city = city.to_string().replace("_", " ");
     let mut chart = ChartBuilder::on(&root)
-        .caption(format!("{} {} Weekly", first_year, city), ("sans-serif", 30).into_font())
+        .caption(format!("{} {} Average Weekly Temperatures", first_year, title_city), ("sans-serif", 36).into_font())
         .margin_top(20)
         .margin_bottom(10)
         .margin_left(10)
         .margin_right(25)
         .y_label_area_size(54)
-        .x_label_area_size(64)
+        .x_label_area_size(54)
         .build_cartesian_2d((0..624).with_key_points(vec![0,52,104,156,208,260,312,364,416,468,520,572,624]), //624 = 24 * 26 or 12 * 52 
          city_low..city_high
         )
@@ -876,8 +959,57 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
         .x_label_style(("sans-serif", 20).into_font())
         .x_label_formatter(&|x: &i32| x_labels[(x / 52).min(12) as usize].to_string())
         .axis_desc_style(("sans-serif", 24).into_font())
-        .x_desc("Months of the Year")
+        //.x_desc("Months of the Year")
         .y_desc("Temperature (°F)")
         .draw().unwrap();
+
+    let city_period = format!("{}_week", city);
+    let week_positions  = [  4,  14,  26,  38,  50,  62,  74,  86,  98, 110, 122, 134, 146, 158, 170, 182, 194, 206, 218, 230, 242, 254, 266, 278, 290, 302, 
+                                      314, 326, 338, 350, 362, 374, 386, 398, 410, 422, 434, 446, 458, 470, 482, 494, 506, 518, 530, 542, 554, 566, 578, 590, 602, 614]; 
+    let temp_result = get_temps("tweek", &city_period, first_year).await?;
+
+    let hi_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmax").unwrap_or(0)).collect();
+    let lo_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmin").unwrap_or(0)).collect();
+
+    let high_vec: Vec<(i32, i32)> = week_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+    let low_vec: Vec<(i32, i32)> = week_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+
+    chart.draw_series(LineSeries::new(
+        high_vec.clone(),
+        &RED,
+    )).unwrap();
+    chart.draw_series(PointSeries::of_element(
+        high_vec,
+        2,
+        &RED,
+        &|c, s, st| {
+            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+        },
+    )).unwrap();
+
+    chart.draw_series(LineSeries::new(
+        low_vec.clone(),
+        &BLUE,
+    )).unwrap();
+    chart.draw_series(PointSeries::of_element(
+        low_vec,
+        2,
+        &BLUE,
+        &|c, s, st| {
+            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+        },
+    )).unwrap();
+
+
+
+
+
+
+
+
     Ok(())
 }
