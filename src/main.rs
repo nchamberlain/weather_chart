@@ -832,35 +832,40 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
     let high_vec: Vec<(i32, i32)> = month_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
     let low_vec: Vec<(i32, i32)> = month_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
 
-    chart.draw_series(LineSeries::new(
-        high_vec.clone(),
-        &RED,
-    )).unwrap();
-    chart.draw_series(PointSeries::of_element(
-        high_vec,
-        2,
-        &RED,
-        &|c, s, st| {
-            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
-        },
-    )).unwrap();
-
-    chart.draw_series(LineSeries::new(
-        low_vec.clone(),
-        &BLUE,
-    )).unwrap();
-    chart.draw_series(PointSeries::of_element(
-        low_vec,
-        2,
-        &BLUE,
-        &|c, s, st| {
-            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
-        },
-    )).unwrap();
+    let segments = split_segments(high_vec.clone());
+    for seg in segments {
+        chart.draw_series(LineSeries::new(
+            seg.clone(),
+            &RED,
+        )).unwrap();
+        chart.draw_series(PointSeries::of_element(
+            seg,
+            2,
+            &RED,
+            &|c, s, st| {
+                return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+                + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+            },
+        )).unwrap();
+    }
+    let segments = split_segments(low_vec.clone());
+    for seg in segments {
+        chart.draw_series(LineSeries::new(
+            seg.clone(),
+            &BLUE,
+        )).unwrap();
+        chart.draw_series(PointSeries::of_element(
+            seg,
+            2,
+            &BLUE,
+            &|c, s, st| {
+                return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+                + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+            },
+        )).unwrap();
+    }
     Ok(())
 }
 async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
@@ -903,35 +908,36 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
     let high_vec: Vec<(i32, i32)> = fort_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
     let low_vec: Vec<(i32, i32)> = fort_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
 
-    chart.draw_series(LineSeries::new(
-        high_vec.clone(),
-        &RED,
-    )).unwrap();
-    chart.draw_series(PointSeries::of_element(
-        high_vec,
-        2,
-        &RED,
-        &|c, s, st| {
-            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
-        },
-    )).unwrap();
-
-    chart.draw_series(LineSeries::new(
-        low_vec.clone(),
-        &BLUE,
-    )).unwrap();
-    chart.draw_series(PointSeries::of_element(
-        low_vec,
-        2,
-        &BLUE,
-        &|c, s, st| {
-            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
-        },
-    )).unwrap();
+    let segments = split_segments(high_vec.clone());
+    for seg in segments {
+        chart.draw_series(LineSeries::new(
+            seg.clone(),
+            &RED,
+        )).unwrap();
+        chart.draw_series(PointSeries::of_element(
+            seg, 2, &RED,
+            &|c, s, st| {
+                return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+                + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+            },
+        )).unwrap();
+    }
+    let segments = split_segments(low_vec.clone());
+    for seg in segments {
+        chart.draw_series(LineSeries::new(
+            seg.clone(),
+            &BLUE,
+        )).unwrap();
+        chart.draw_series(PointSeries::of_element(
+            seg, 2, &BLUE,
+            &|c, s, st| {
+                return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+                + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+            },
+        )).unwrap();
+    }
     Ok(())
 }
 async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
@@ -974,42 +980,63 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
     let high_vec: Vec<(i32, i32)> = week_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
     let low_vec: Vec<(i32, i32)> = week_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
 
-    chart.draw_series(LineSeries::new(
-        high_vec.clone(),
-        &RED,
-    )).unwrap();
-    chart.draw_series(PointSeries::of_element(
-        high_vec,
-        2,
-        &RED,
-        &|c, s, st| {
-            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
-        },
-    )).unwrap();
-
-    chart.draw_series(LineSeries::new(
-        low_vec.clone(),
-        &BLUE,
-    )).unwrap();
-    chart.draw_series(PointSeries::of_element(
-        low_vec,
-        2,
-        &BLUE,
-        &|c, s, st| {
-            return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-            + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-            + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
-        },
-    )).unwrap();
-
-
-
-
-
-
-
-
+    let segments = split_segments(high_vec.clone());
+    for seg in segments {
+        chart.draw_series(LineSeries::new(
+            seg.clone(),
+            &RED,
+        )).unwrap();
+        chart.draw_series(PointSeries::of_element(
+            seg,
+            2,
+            &RED,
+            &|c, s, st| {
+                return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+                + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+            },
+        )).unwrap();
+    }
+    let segments = split_segments(low_vec.clone());
+    for seg in segments {
+        chart.draw_series(LineSeries::new(
+            seg.clone(),
+            &BLUE,
+        )).unwrap();
+        chart.draw_series(PointSeries::of_element(
+            seg,
+            2,
+            &BLUE,
+            &|c, s, st| {
+                return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+                + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
+            },
+        )).unwrap();
+    }
     Ok(())
+}
+fn split_segments(data: Vec<(i32, i32)>) -> Vec<Vec<(i32, i32)>>
+{
+    let mut segments = Vec::new();
+    let mut current_segment = Vec::new();
+
+    for point in data {
+        let (_point_x, point_y) = point;
+        match point_y {
+            point_y if point_y > 200 => {
+                //println!("Point_y > 200 found");
+                if !current_segment.is_empty() {
+                    segments.push(current_segment);
+                    current_segment = Vec::new();   
+                } 
+            }  
+            _ =>    current_segment.push(point)  // None should never happen
+        }
+    }
+    // Push the last segment if not empty
+    if !current_segment.is_empty() {
+        segments.push(current_segment);
+    }
+    segments
 }
