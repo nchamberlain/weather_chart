@@ -196,15 +196,15 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
     for the_year in first_year..=last_year {
         print!("{the_year},");
         io::stdout().flush().unwrap(); // force flush now
-        let mfile_name = format!("imgs/{city}_{the_year}_month.png");
-        let wfile_name = format!("imgs/{city}_{the_year}_week.png");
-        let ffile_name = format!("imgs/{city}_{the_year}_fort.png");
+        let mfile_name = format!("bar_charts/{city}_{the_year}_month.svg");
+        let wfile_name = format!("bar_charts/{city}_{the_year}_week.svg");
+        let ffile_name = format!("bar_charts/{city}_{the_year}_fort.svg");
 
         let mtitle_text = format!("{the_year} {city}  Monthly Avg Temperatures");
         let wtitle_text = format!("{the_year} {city}  Weekly Avg Temperatures");
         let ftitle_text = format!("{the_year} {city}  Fortnightly Avg Temperatures");
        // ------ monthly chart ------------------------------------------------------
-        let mdwg = BitMapBackend::new(&mfile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
+        let mdwg = SVGBackend::new(&mfile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
         mdwg.fill(&WHITE).expect("Failed to fill dwg"); //this automatically makes a rectangle size of drawing area and fills it with white
 
         // Draw axis lines on the drawing area
@@ -233,7 +233,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
         }
         mdwg.present().expect("Failed monthly Chart drawing");
         // ----------- wweekly chart ------------------------------------------------------
-        let wdwg = BitMapBackend::new(&wfile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
+        let wdwg = SVGBackend::new(&wfile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
         wdwg.fill(&WHITE).expect("Failed to fill dwg"); //this automatically makes a rectangle size of drawing area and fills it with white
 
         // Draw axis lines on the drawing area
@@ -262,7 +262,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
         }
         wdwg.present().expect("Failed weekly Chart drawing");
         // ----------- fortnightly chart ------------------------------------------------------
-        let fdwg = BitMapBackend::new(&ffile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
+        let fdwg = SVGBackend::new(&ffile_name, (DWG_WIDTH as u32, DWG_HEIGHT as u32)).into_drawing_area();
         fdwg.fill(&WHITE).expect("Failed to fill dwg"); //this automatically makes a rectangle size of drawing area and fills it with white
 
         // Draw axis lines on the drawing area
@@ -293,7 +293,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
     }
     Ok(())
 }
-fn draw_legend(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
+fn draw_legend(dwg: &DrawingArea<SVGBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
     let legend_x = LEFT_MARGIN + AXIS_WIDTH - 150;
     let legend_y = TOP_MARGIN + 12;
     let rect_size = 20;
@@ -332,7 +332,7 @@ fn draw_legend(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn st
     }
     Ok(())
 }
-fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_offset: f64,  pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>> {
+fn draw_hi_temps(dwg: &DrawingArea<SVGBackend, Shift>, period: &str, z_line_offset: f64,  pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>> {
     let mut y_adj: i32;
     match period {
         "Week" => {    
@@ -342,7 +342,12 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
                 let tmp: i32; // get ready to hold the hi_temp to display
                 let hi_result = rows[idx-1].try_get("tmax");
                 match hi_result {
-                    Ok(_) => { tmp = hi_result.unwrap(); } //set tmp to hi_temp
+                    Ok(_) => { 
+                        tmp = hi_result.unwrap(); 
+                        if tmp >200 { // filter out null data 
+                            continue
+                        }
+                    } //set tmp to hi_temp
                     Err(_) => { continue; }
                 }
                 let y: f64 = f64::from(tmp) * pixel_per_degree; //calc how tall this line should be
@@ -365,7 +370,12 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
                 let tmp: i32;
                 let hi_result = rows[idx-1].try_get("tmax");
                 match hi_result {
-                    Ok(_) => { tmp = hi_result.unwrap(); }
+                    Ok(_) => { 
+                        tmp = hi_result.unwrap();
+                        if tmp >200 { // filter out null data 
+                            continue
+                        }
+                    }
                     Err(_) => { continue; }
                 }
                 let y: f64 = f64::from(tmp) * pixel_per_degree;
@@ -388,7 +398,12 @@ fn draw_hi_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_o
                 let tmp: i32;
                 let hi_result = rows[idx-1].try_get("tmax");
                 match hi_result {
-                    Ok(_) => { tmp = hi_result.unwrap(); }
+                    Ok(_) => { 
+                        tmp = hi_result.unwrap();
+                        if tmp >200 { // filter out null data 
+                            continue
+                        }
+                    }
                     Err(_) => { continue; }
                 }
                 let y: f64 = f64::from(tmp) * pixel_per_degree;
@@ -421,7 +436,7 @@ fn get_warm_colors(temp: i32) -> RGBColor {
         RGBColor(255, 0, 0) // Red
     }
 }
-fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_offset: f64, pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>>  {
+fn draw_low_temps(dwg: &DrawingArea<SVGBackend, Shift>, period: &str, z_line_offset: f64, pixel_per_degree: f64, rows: &Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>>  {
     let mut y_adj: i32;
     match period {
         "Week" => {
@@ -432,7 +447,12 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
                 let tmp: i32;
                 let low_result = rows[idx-1].try_get("tmin");
                 match low_result {
-                    Ok(_) =>  { tmp = low_result.unwrap(); }
+                    Ok(_) =>  { 
+                        tmp = low_result.unwrap();
+                        if tmp >200 { // filter out null data 
+                            continue
+                        }
+                    }
                     Err(_) => { continue; }
                 }
                 let y: f64 = f64::from(tmp) * pixel_per_degree;
@@ -456,7 +476,12 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
                 let tmp: i32;
                 let low_result = rows[idx-1].try_get("tmin");
                 match low_result {
-                    Ok(_) =>  { tmp = low_result.unwrap(); }
+                    Ok(_) =>  { 
+                        tmp = low_result.unwrap(); 
+                        if tmp >200 { // filter out null data 
+                            continue
+                        }
+                    }
                     Err(_) => { continue; }
                 }
                 let y: f64 = f64::from(tmp) * pixel_per_degree;
@@ -479,7 +504,12 @@ fn draw_low_temps(dwg: &DrawingArea<BitMapBackend, Shift>, period: &str, z_line_
                 let tmp: i32;
                 let low_result = rows[idx-1].try_get("tmin");
                 match low_result {
-                    Ok(_) =>  { tmp = low_result.unwrap(); }
+                    Ok(_) =>  { 
+                        tmp = low_result.unwrap(); 
+                        if tmp >200 { // filter out null data 
+                            continue
+                        }
+                    }
                     Err(_) => { continue; }
                 }
                 let y: f64 = f64::from(tmp) * pixel_per_degree;
@@ -512,7 +542,7 @@ fn get_cool_colors(temp: i32) -> RGBColor {
         RGBColor(139,0,0)  // Dark Red
     }
 }
-fn draw_axes(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
+fn draw_axes(dwg: &DrawingArea<SVGBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
     // Draw axis lines on the drawing area
     dwg.draw(&PathElement::new( //draw y axis
         vec![(LEFT_MARGIN, TOP_MARGIN), (LEFT_MARGIN, AXIS_HEIGHT + TOP_MARGIN)],
@@ -524,7 +554,7 @@ fn draw_axes(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std:
     ))?;  
     Ok(())  
 }
-fn draw_grids(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
+fn draw_grids(dwg: &DrawingArea<SVGBackend, Shift>) -> Result<(), Box<dyn std::error::Error>> {
     // Draw 4 vertical grid lines
     for i in 1..5 { 
         let x = LEFT_MARGIN + i * H_TICK_WIDTH;
@@ -569,7 +599,7 @@ fn draw_grids(dwg: &DrawingArea<BitMapBackend, Shift>) -> Result<(), Box<dyn std
     }
     Ok(())
 }
-fn draw_title(dwg: &DrawingArea<BitMapBackend, Shift>, title_text: &str, title_style: TextStyle) -> Result<(), Box<dyn std::error::Error>> {
+fn draw_title(dwg: &DrawingArea<SVGBackend, Shift>, title_text: &str, title_style: TextStyle) -> Result<(), Box<dyn std::error::Error>> {
     let (title_width, title_height) = dwg.estimate_text_size(&title_text, &title_style)?;
     
     dwg.draw_text(&title_text, &title_style,
@@ -577,7 +607,7 @@ fn draw_title(dwg: &DrawingArea<BitMapBackend, Shift>, title_text: &str, title_s
     )?; 
     Ok(())
 }
-fn draw_axis_labels(dwg: &DrawingArea<BitMapBackend, Shift>,
+fn draw_axis_labels(dwg: &DrawingArea<SVGBackend, Shift>,
                          x_axis_style: TextStyle, 
                          y_axis_style: TextStyle, 
                          period: &str,
@@ -793,7 +823,7 @@ async fn generate_line_charts(the_city: &str) -> Result<(), sqlx::Error> {
 async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
     println!("Monthly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
     for the_year in first_year..=last_year {
-        let file_name = format!("charts/{}_{}_month.svg", city, the_year);
+        let file_name = format!("line_charts/{}_{}_month.svg", city, the_year);
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
         let _ = root.fill(&WHITE);
         let title_city = city.to_string().replace("_", " ");
@@ -873,7 +903,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
 async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
     println!("Fortnightly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
     for the_year in first_year..=last_year {
-        let file_name = format!("charts/{}_{}_fort.svg", city, the_year);
+        let file_name = format!("line_charts/{}_{}_fort.svg", city, the_year);
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
         let _ = root.fill(&WHITE);
         let title_city = city.to_string().replace("_", " ");
@@ -948,7 +978,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
 async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
     println!("Weekly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
     for the_year in first_year..=last_year {
-        let file_name = format!("charts/{}_{}_week.svg", city,the_year);
+        let file_name = format!("line_charts/{}_{}_week.svg", city,the_year);
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
         let _ = root.fill(&WHITE);
         let title_city = city.to_string().replace("_", " ");
