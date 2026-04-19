@@ -827,7 +827,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
         let _ = root.fill(&WHITE);
         let title_city = city.to_string().replace("_", " ");
-        let mut chart = ChartBuilder::on(&root)
+        let mut chartm = ChartBuilder::on(&root)
             .caption(format!("{} {} Average Monthly Temperatures", the_year, title_city), ("sans-serif", 36).into_font())
             .margin_top(20)
             .margin_bottom(10)
@@ -840,7 +840,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
             )
             .unwrap();
         let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
-        chart.configure_mesh()
+        chartm.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
             .x_label_style(("sans-serif", 20).into_font())
@@ -864,11 +864,11 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
-            chart.draw_series(LineSeries::new(
+            chartm.draw_series(LineSeries::new(
                 seg.clone(),
                 &RED,
             )).unwrap();
-            chart.draw_series(PointSeries::of_element(
+            chartm.draw_series(PointSeries::of_element(
                 seg,
                 2,
                 &RED,
@@ -879,13 +879,18 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
                 },
             )).unwrap();
         }
+        let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
+        chartm.draw_series(LineSeries::new(
+            fake_high_data,
+            &RED,
+            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
         let segments = split_segments(low_vec.clone());
         for seg in segments {
-            chart.draw_series(LineSeries::new(
+            chartm.draw_series(LineSeries::new(
                 seg.clone(),
                 &BLUE,
             )).unwrap();
-            chart.draw_series(PointSeries::of_element(
+            chartm.draw_series(PointSeries::of_element(
                 seg,
                 2,
                 &BLUE,
@@ -896,6 +901,20 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
                 },
             )).unwrap();
         }
+        let fake_low_data = vec![(624, 0)];
+        chartm.draw_series(LineSeries::new(
+            fake_low_data,
+            &BLUE,
+            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
+        // The labels in the legend are set when the series are drawn, not when legend is configured. The chart.configure_series_labels() must be called after all series
+        //     that you want included in the legend are drawn, not before. 
+        // The labels in legend can be arbitrarily long and the legend will automatically adjust to fit the labels.
+        // **margin** should be called padding because it sets the distance between legend elements & legend border and NOT the distance between legend and chart edge
+        // **legend_area_size** is the size of the area reserved for the legend example (line), not the size of the legend text itself. If legend_area_size is set too small,
+        //      the line will overlap the legend text, even if the margins are set to a large value.
+        chartm.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(0.5)).label_font(("Calibri", 20)).draw().unwrap(); 
+
         root.present().unwrap();
     }
     Ok(())
@@ -907,7 +926,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
         let _ = root.fill(&WHITE);
         let title_city = city.to_string().replace("_", " ");
-        let mut chart = ChartBuilder::on(&root)
+        let mut chartf = ChartBuilder::on(&root)
             .caption(format!("{} {} Average Fortnight Temperatures", the_year, title_city), ("sans-serif", 36).into_font())
             .margin_top(20)
             .margin_bottom(10)
@@ -920,7 +939,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             )
             .unwrap();
         let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
-        chart.configure_mesh()
+        chartf.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
             .x_label_style(("sans-serif", 20).into_font())
@@ -943,11 +962,11 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
-            chart.draw_series(LineSeries::new(
+            chartf.draw_series(LineSeries::new(
                 seg.clone(),
                 &RED,
             )).unwrap();
-            chart.draw_series(PointSeries::of_element(
+            chartf.draw_series(PointSeries::of_element(
                 seg, 2, &RED,
                 &|c, s, st| {
                     return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
@@ -956,13 +975,18 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
+        chartf.draw_series(LineSeries::new(
+            fake_high_data,
+            &RED,
+            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
         let segments = split_segments(low_vec.clone());
         for seg in segments {
-            chart.draw_series(LineSeries::new(
+            chartf.draw_series(LineSeries::new(
                 seg.clone(),
                 &BLUE,
             )).unwrap();
-            chart.draw_series(PointSeries::of_element(
+            chartf.draw_series(PointSeries::of_element(
                 seg, 2, &BLUE,
                 &|c, s, st| {
                     return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
@@ -971,6 +995,13 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        let fake_low_data = vec![(624, 0)];
+        chartf.draw_series(LineSeries::new(
+            fake_low_data,
+            &BLUE,
+            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
+        chartf.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(0.5)).label_font(("Calibri", 20)).draw().unwrap(); 
         root.present().unwrap();
     }
     Ok(())
@@ -982,7 +1013,7 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
         let _ = root.fill(&WHITE);
         let title_city = city.to_string().replace("_", " ");
-        let mut chart = ChartBuilder::on(&root)
+        let mut chartw = ChartBuilder::on(&root)
             .caption(format!("{} {} Average Weekly Temperatures", the_year, title_city), ("sans-serif", 36).into_font())
             .margin_top(20)
             .margin_bottom(10)
@@ -995,7 +1026,7 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             )
             .unwrap();
         let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
-        chart.configure_mesh()
+        chartw.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
             .x_label_style(("sans-serif", 20).into_font())
@@ -1018,11 +1049,11 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
-            chart.draw_series(LineSeries::new(
+            chartw.draw_series(LineSeries::new(
                 seg.clone(),
                 &RED,
             )).unwrap();
-            chart.draw_series(PointSeries::of_element(
+            chartw.draw_series(PointSeries::of_element(
                 seg,
                 2,
                 &RED,
@@ -1033,13 +1064,18 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for multiple segments
+        chartw.draw_series(LineSeries::new(
+            fake_high_data,
+            &RED,
+            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
         let segments = split_segments(low_vec.clone());
         for seg in segments {
-            chart.draw_series(LineSeries::new(
+            chartw.draw_series(LineSeries::new(
                 seg.clone(),
                 &BLUE,
             )).unwrap();
-            chart.draw_series(PointSeries::of_element(
+            chartw.draw_series(PointSeries::of_element(
                 seg,
                 2,
                 &BLUE,
@@ -1050,6 +1086,13 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        let fake_low_data = vec![(624, 0)];
+        chartw.draw_series(LineSeries::new(
+            fake_low_data,
+            &BLUE,
+            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
+        chartw.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(0.5)).label_font(("Calibri", 20)).draw().unwrap(); 
         root.present().unwrap();
     }
     Ok(())
