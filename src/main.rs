@@ -2,13 +2,13 @@ use colorize::AnsiColor;
 use execute::Execute;
 use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, MySql, Pool, Row};
 use dotenvy::dotenv;
-use tokio::sync::RwLockMappedWriteGuard;
+//use tokio::sync::RwLockMappedWriteGuard;
 use std::env;
 use std::sync::OnceLock;
 use std::process::Command;
 use std::io::{self, Write};
-use std::{collections::HashMap, error::Error};
-use plotters::prelude::*;
+use std::collections::HashMap;
+use plotters::{prelude::*, style::full_palette::BLUE_400};
 use plotters::coord::Shift;
 use chrono::{NaiveDate, Months};
 //use fahrenheit_to_celsius::f_to_c;
@@ -66,7 +66,7 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
         "List all cities",
         "Generate BAR Charts by CITY",
         "Generate LINE Charts by CITY",
-        "Generate Wide Date-Temp Charts by CITY - UNDER CONSTRUCTION",
+        "Generate Wide Date-Temp Charts by CITY",
         "Generate Videos from Charts",
         "Exit",
     ];
@@ -89,8 +89,8 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
             //println!("Generate LINE Charts by CITY - UNDER CONSTRUCTION");
             generate_line_charts_by_city().await.expect("Failed to generate line charts by city");
         }
-          else if select == "Generate Wide Date-Temp Charts by CITY - UNDER CONSTRUCTION" {
-            println!("Generate Wide Date-Temp Charts by CITY - UNDER CONSTRUCTION");
+          else if select == "Generate Wide Date-Temp Charts by CITY" {
+            //println!("Generate Wide Date-Temp Charts by CITY - UNDER CONSTRUCTION");
             generate_date_time_charts_by_city().await.expect("Failed to generate line charts by city");
         }
           else if select == "Generate Videos from Charts" {
@@ -821,24 +821,24 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let mut out_file_name = String::new();
     let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
     match chart_type {
-        1 => {println!("Generating High-Max charts for {city}");
-                chart_title = format!("{}: 100 Hottest Daytime Temperatures", city);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 500", city);
+        1 => {//println!("Generating High-Max charts for {city}");
+                chart_title = format!("{}: 365 Hottest Daytime Temperatures", city);
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 365", city);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
             },
-        2 => {println!("Generating High-Min charts for {city}");
-                chart_title = format!("{}: 100 Coolest Daytime Temperatures", city);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 400", city);
+        2 => {//println!("Generating High-Min charts for {city}");
+                chart_title = format!("{}: 365 Coolest Daytime Temperatures", city);
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 365", city);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
             },
-        3 => {println!("Generating Low-Max charts for {city}");
-                chart_title = format!("{}: 100 Coldest Nighttime Temperatures", city);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 300", city);
+        3 => {//println!("Generating Low-Max charts for {city}");
+                chart_title = format!("{}: 365 Coldest Nighttime Temperatures", city);
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 365", city);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
             },
-        4 => {println!("Generating Low-Min charts for {city}");
-                chart_title = format!("{}: 100 Warmest Nighttime Temperatures", city);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 200", city);
+        4 => {//println!("Generating Low-Min charts for {city}");
+                chart_title = format!("{}: 365 Warmest Nighttime Temperatures", city);
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 365", city);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
             },
         _ => println!("Unknown chart type"),
@@ -890,14 +890,25 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 let temp: i32 = row.get(1);
                 Circle::new(
                 (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp as f64),
-                     2, BLUE.filled())})
+                     3, BLUE.filled())})
             ).expect("Error drawing series");
-
-    // find dup dates and update chart
-    for item in &dup_dates {
-        println!("Duplicate date found: {} for temp: {} count: {}", item.0, item.1.0, item.1.1);
-    }
-    chart.draw_series(
+    // display dup data for diagnostic purposes
+    //for item in &dup_dates {
+    //    println!("Duplicate date found: {} for temp: {} count: {}", item.0, item.1.0, item.1.1);
+    //}
+    chart.draw_series(PointSeries::of_element(dup_dates, 4, &BLUE_400,  
+        &|item, s, st| {
+                let date_str = item.0;
+                let temp = item.1.0;
+                let count = item.1.1;
+                let xy = (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp);
+                return EmptyElement::at(xy)
+                //+ TriangleMarker::new((0,0), s + count +2, st.filled())
+                + Circle::new((0,0), s + count + 2, st.filled())
+                + Text::new(format!("{}", count), (-2,4),("sans-serif", 12).into_font());
+            },
+    )).unwrap();
+    /*chart.draw_series(
         dup_dates.iter()
             .map(|item| {
                 let date_str = item.0;
@@ -909,7 +920,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                     RED.filled(),
                 )
             })
-    ).expect("Error drawing duplicate date markers");
+    ).expect("Error drawing duplicate date markers");*/
 
     root.present().expect("Unable to write result to file, please make sure 'date_charts' folder exists under current dir");
     println!("Result has been saved to {}", out_file_name);
@@ -1248,7 +1259,7 @@ fn split_segments(data: Vec<(i32, i32)>) -> Vec<Vec<(i32, i32)>>
 }
 fn f_to_c(num: f64) -> f64 {
     let result = (num - 32.0) * 5.0 / 9.0;
-    println!("\nC = {}", result);
+    //println!("\nC = {}", result);
     result
 }
 
