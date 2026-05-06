@@ -822,23 +822,23 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
     match chart_type {
         1 => {//println!("Generating High-Max charts for {city}");
-                chart_title = format!("{}: 365 Hottest Daytime Temperatures", city);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 365", city);
+                chart_title = format!("{}: 500 Hottest Daytime Temperatures", city);
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
             },
         2 => {//println!("Generating High-Min charts for {city}");
-                chart_title = format!("{}: 365 Coolest Daytime Temperatures", city);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 365", city);
+                chart_title = format!("{}: 500 Coolest Daytime Temperatures", city);
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
             },
         3 => {//println!("Generating Low-Max charts for {city}");
-                chart_title = format!("{}: 365 Coldest Nighttime Temperatures", city);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 365", city);
+                chart_title = format!("{}: 500 Coldest Nighttime Temperatures", city);
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
             },
         4 => {//println!("Generating Low-Min charts for {city}");
-                chart_title = format!("{}: 365 Warmest Nighttime Temperatures", city);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 365", city);
+                chart_title = format!("{}: 500 Warmest Nighttime Temperatures", city);
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
             },
         _ => println!("Unknown chart type"),
@@ -857,11 +857,11 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let earliest_date = NaiveDate::parse_from_str(earliest_date_str, "%Y-%m-%d").unwrap_or(NaiveDate::from_ymd_opt(1870, 1, 1).unwrap()) - Months::new(11); // subtract 11 month to give some padding on the left side of the chart
     let latest_date = NaiveDate::parse_from_str(latest_date_str, "%Y-%m-%d").unwrap_or(NaiveDate::from_ymd_opt(2070, 1, 1).unwrap()) + Months::new(11); // add 11 month to give some padding on the right side of the chart
 
-    let root = SVGBackend::new(&out_file_name, (1440, 480)).into_drawing_area();
+    let root = SVGBackend::new(&out_file_name, (1920, 480)).into_drawing_area();
     let _ = root.fill(&WHITE);
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
-        .caption(chart_title, ("sans-serif", 40),)
+        .caption(chart_title, ("sans-serif", 36),)
         .set_label_area_size(LabelAreaPosition::Left, 60)
         .set_label_area_size(LabelAreaPosition::Right, 60)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
@@ -875,11 +875,14 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
         .disable_x_mesh()
         //.disable_y_mesh()
         .x_labels(30)
+        .label_style(("sans-serif", 14))
         .max_light_lines(4)
+        //.y_label_style(("sans-serif", 16))
         .y_desc("Average Temp (F)")
         .draw().unwrap();
     chart
         .configure_secondary_axes()
+        .label_style(("sans-serif", 14))
         .y_desc("Average Temp (C)")
         .draw().unwrap();
 
@@ -1287,7 +1290,13 @@ fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)
                 count = 1;
                 tdate = "1800-01-01";
             }
-        }
+        } // else if count > 1 push the dup date info into the hashmap and reset count and tdate
+         else if count > 1 {
+            dup_dates.insert(tdate, (current_temp as f64, count));
+            //println!("Non-matching temp found. Temp = {}: Count: {}. tdate: {}", current_temp, count, tdate);
+            count = 1;
+            tdate = "1800-01-01";
+         }
     }
     dup_dates
 }
