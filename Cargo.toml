@@ -6,10 +6,12 @@ edition = "2024"
 [dependencies]
 plotters = "0.3.7"
 sqlx = { version = "0.8", features = [ "runtime-tokio", "mysql", "macros", "tls-native-tls" ] }
-tokio = { version = "1.52.0", features = ["full"] }
+tokio = { version = "1.53.0", features = ["full"] }
 dotenvy = "0.15"
 inquire = { version = "0.9", features = ["date"] }
 colorize = "0.1.0"
 execute = "0.2.15"
-chrono = "0.4.44"
+chrono = "0.4.45"
 fahrenheit_to_celsius = "0.2"
+log = "0.4.33"
+env_logger = "0.11.11"

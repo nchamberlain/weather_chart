@@ -2,7 +2,8 @@ use colorize::AnsiColor;
 use execute::Execute;
 use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, MySql, Pool, Row};
 use dotenvy::dotenv;
-//use tokio::sync::RwLockMappedWriteGuard;
+use log::{error, warn, info, debug, trace};
+use env_logger;
 use std::env;
 use std::sync::OnceLock;
 use std::process::Command;
@@ -49,7 +50,8 @@ async fn main() -> Result<(), sqlx::Error> {
     //This is more efficient than creating a new pool for each function call. 
     //The pool will manage the connections and reuse them as needed.
     dotenv().ok();
-        
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .init();  
     DB_URL.get_or_init(|| env::var("DATABASE_URL").expect("DATABASE_URL must be set"));
     DB_POOL.set(MySqlPoolOptions::new()
         .max_connections(5) // Set the maximum number of connections
@@ -58,6 +60,12 @@ async fn main() -> Result<(), sqlx::Error> {
         .expect("Failed to initialize database pool");
 
     let result = get_user_choice();
+    trace!("Trace level is active (most detailed)");
+    debug!("debug level is active (lots of details)");
+    info!("info is active (std setting)");
+    warn!("warning level is set (typical for production)");
+    error!("only errors reported (for mature production only)");
+
     Ok((result.await)?)
 }
 
@@ -79,25 +87,26 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
 
         // each selected action calls a separate tokio runtime so the must each be marked with #[tokio::main]
         if select == "List all cities" {
-            //println!("Listing all cities...");
+            trace!("Listing all cities...");
             list_all_cities().await.expect("Failed to list all cities");
         } 
           else if select == "Generate BAR Charts by CITY" {
             generate_bar_charts_by_city().await.expect("Failed to generate bar charts by city");
         }
           else if select == "Generate LINE Charts by CITY" {
-            //println!("Generate LINE Charts by CITY - UNDER CONSTRUCTION");
+            trace!("Generate LINE Charts by CITY");
             generate_line_charts_by_city().await.expect("Failed to generate line charts by city");
         }
           else if select == "Generate Wide Date-Temp Charts by CITY" {
-            //println!("Generate Wide Date-Temp Charts by CITY - UNDER CONSTRUCTION");
+            trace!("Generate Wide Date-Temp Charts by CITY");
             generate_date_time_charts_by_city().await.expect("Failed to generate line charts by city");
         }
           else if select == "Generate Videos from Charts" {
+            trace!("Generate Videos from Charts");
             generate_videos_by_city().await.expect("Failed to generate videos from charts");
         }  
           else if select == "Exit" {
-            println!("Exiting the program. Goodbye!");
+            info!("Exiting the program. Goodbye!");
             break;
         }
     }
@@ -111,12 +120,12 @@ async fn list_all_cities() -> Result<(), sqlx::Error> {
             let city_list = city_list_result.unwrap();
             for a_city in city_list {
                 let c_name: &str = a_city.get("name_of_city");
-                println!("Available city: {c_name}");
+                info!("Available city: {c_name}");
             }
         },
-        Err(e) => eprint!("Cities not found, {} ", e),
+        Err(e) => error!("Cities not found, {} ", e),
     }   
-    println!("Listed names of the cities in city_names table in database: {:?}", DB_URL);
+    info!("Listed names of the cities in city_names table in database: {:?}", DB_URL);
     Ok(())
 }
 async fn list_cities() -> Result<Vec<MySqlRow>, sqlx::Error> {
@@ -138,7 +147,7 @@ async fn select_cities(message: String) -> Vec<String> {
                 cities.push(c_name);
             }
         },
-        Err(e) => eprint!("Cities not found, {} ", e),
+        Err(e) => error!("Cities not found, {} ", e),
     }   
 
     let prompt_message = message.green();
@@ -151,7 +160,7 @@ async fn generate_bar_charts_by_city() -> Result<(), sqlx::Error> {
     let selected_cities = select_cities("Please select the cities to generate Bar Charts".to_string()).await;
 
     for the_city in selected_cities {
-        println!("\nGenerating BAR charts for city of {0}", the_city.clone().red());
+        info!("\nGenerating BAR charts for city of {0}", the_city.clone().red());
         generate_city_bar_charts(&the_city).await?;    
     }
     Ok(())
@@ -164,13 +173,13 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
     match fn_get_min_max { // city_low & city_high here must be initialized in this block to make compiler happy
         Ok(_) => {let min_max: &(i32, i32) = &fn_get_min_max.unwrap();
                 city_low = min_max.0;  city_high = min_max.1; /*println!("Low: {city_low}  High: {city_high}")*/},
-        Err(e) =>  {city_low = 0; city_high = 0; eprintln!("Error getting City min max: {}",e)}
+        Err(e) =>  {city_low = 0; city_high = 0; error!("Error getting City min max: {}",e)}
     }  
     //let mut first_year: i32 = 0; 
     let first_year: i32 = get_1st_year(&the_city).await;
     let last_year: i32 = get_end_year(&the_city).await;
 
-    println!("City: {city} from {first_year} to {last_year}"); 
+    info!("City: {city} from {first_year} to {last_year}"); 
     // calc these here so available to the functions
     let y_lowest = city_low - 0; // can adjust chart min temp here 
     let y_highest = city_high + 0; //can adjust chart max temp
@@ -186,7 +195,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
         zero_line_offset = f64::from(z_diff) * pixel_per_degree;
     }
 
-    println!("Axis Height: {AXIS_HEIGHT} Y range: {y_range} degrees. Pixels per degree: {pixel_per_degree}. Zero offset: {zero_line_offset}");
+    debug!("Axis Height: {AXIS_HEIGHT} Y range: {y_range} degrees. Pixels per degree: {pixel_per_degree}. Zero offset: {zero_line_offset}");
  
     let mperiod = "Month"; // periods can be Month, Week, or Fort
     let wperiod = "Week"; 
@@ -238,7 +247,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
                 draw_hi_temps(&mdwg, mperiod, zero_line_offset, pixel_per_degree, &fn_result.as_ref().unwrap()).expect("Draw Hi Temps Failed"); 
                 draw_low_temps(&mdwg, mperiod, zero_line_offset, pixel_per_degree, &fn_result.as_ref().unwrap()).expect("Draw Low Temps Failed");
             }
-            Err(e) => eprintln!("Error getting temperatures from db: {}", e),
+            Err(e) => error!("Error getting temperatures from db: {}", e),
         }
         mdwg.present().expect("Failed monthly Chart drawing");
         // ----------- wweekly chart ------------------------------------------------------
@@ -267,7 +276,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
                 draw_hi_temps(&wdwg, wperiod, zero_line_offset, pixel_per_degree, &fn_result.as_ref().unwrap()).expect("Draw Hi Temps Failed"); 
                 draw_low_temps(&wdwg, wperiod, zero_line_offset, pixel_per_degree, &fn_result.as_ref().unwrap()).expect("Draw Low Temps Failed");
             }
-            Err(e) => eprintln!("Error getting temperatures from db: {}", e),
+            Err(e) => error!("Error getting temperatures from db: {}", e),
         }
         wdwg.present().expect("Failed weekly Chart drawing");
         // ----------- fortnightly chart ------------------------------------------------------
@@ -296,7 +305,7 @@ async fn generate_city_bar_charts(the_city: &str) -> Result<(), sqlx::Error> {
                 draw_hi_temps(&fdwg, fperiod, zero_line_offset, pixel_per_degree, &fn_result.as_ref().unwrap()).expect("Draw Hi Temps Failed"); 
                 draw_low_temps(&fdwg, fperiod, zero_line_offset, pixel_per_degree, &fn_result.as_ref().unwrap()).expect("Draw Low Temps Failed");
             }
-            Err(e) => eprintln!("Error getting temperatures from db: {}", e),
+            Err(e) => error!("Error getting temperatures from db: {}", e),
         }
         fdwg.present().expect("Failed fortnight Chart drawing");
     }
@@ -428,7 +437,7 @@ fn draw_hi_temps(dwg: &DrawingArea<SVGBackend, Shift>, period: &str, z_line_offs
                 ))?;
             }
         },
-        _ => println!("Unknown Period"),
+        _ => error!("Unknown Period"),
     }
     Ok(())
 }
@@ -534,7 +543,7 @@ fn draw_low_temps(dwg: &DrawingArea<SVGBackend, Shift>, period: &str, z_line_off
                 ))?;
             }
         },
-        _ => println!("Unknown Period"),
+        _ => error!("Unknown Period"),
     }
     Ok(())    
 }
@@ -626,7 +635,7 @@ fn draw_axis_labels(dwg: &DrawingArea<SVGBackend, Shift>,
     match period {
         "Week" => {
             let (_x_label_width, x_label_height) = dwg.estimate_text_size(&format!("55"), &x_axis_style)?;
-            //println!("x_label_width: {}, x_label_height: {}", _x_label_width, x_label_height);
+            debug!("x_label_width: {}, x_label_height: {}", _x_label_width, x_label_height);
             for i in 1..53 {
                 let x = i * (AXIS_WIDTH / 52) + LEFT_MARGIN;
                 let i_str = i.to_string();
@@ -635,7 +644,7 @@ fn draw_axis_labels(dwg: &DrawingArea<SVGBackend, Shift>,
         },
         "Fort" => {
             let (_x_label_width, x_label_height) = dwg.estimate_text_size(&format!("55"), &x_axis_style)?;
-            //println!("x_label_width: {}, x_label_height: {}", _x_label_width, x_label_height);
+            debug!("x_label_width: {}, x_label_height: {}", _x_label_width, x_label_height);
             for i in 1..27 {
                 let x = i * (AXIS_WIDTH / 26) + LEFT_MARGIN - 15;
                 let i_str = i.to_string();
@@ -663,7 +672,7 @@ fn draw_axis_labels(dwg: &DrawingArea<SVGBackend, Shift>,
                 dwg.draw_text(&month_abbr, &x_axis_style, (x, AXIS_HEIGHT + TOP_MARGIN + 10))?;
             }
         },
-        _ => println!("Unknown Period"),
+        _ => error!("Unknown Period"),
     }
 
     // Draw Y Axis Label
@@ -702,7 +711,7 @@ async fn get_1st_year(city: &str) -> i32{
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await.expect("Failed to fetch first year");
     match rows.len() {
-         0 => { eprintln!("No data found for city: {}", city); return 0; },
+         0 => { error!("No data found for city: {}", city); return 0; },
          _ => {
             let first_year_row = &rows[0]; //unwrap the row
             let first_year_str: &str = first_year_row.get("tdate"); //get date string, for ex. 2020-09-05
@@ -717,7 +726,7 @@ async fn get_end_year(city: &str) -> i32 {
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await.expect("Failed to fetch last year");
     match rows.len() {
-         0 => { eprintln!("No data found for city: {}", city); return 0; },
+         0 => { error!("No data found for city: {}", city); return 0; },
          _ => {
             let last_year_row = &rows[0]; //unwrap the row
             let last_year_str: &str = last_year_row.get("tdate"); //get date string, for ex. 2020-11-21
@@ -729,14 +738,14 @@ async fn get_end_year(city: &str) -> i32 {
 async fn generate_videos_by_city() -> Result<(), sqlx::Error> {
     let selected_cities = select_cities("Please select the cities to GENERATE videos".to_string()).await;
     for the_city in selected_cities {
-        println!("Generating videos for city of {0}", the_city.clone().red());
+        debug!("Generating videos for city of {0}", the_city.clone().red());
         generate_videos_from_charts(&the_city).await?;    
     }
     Ok(())
 }
 async fn generate_videos_from_charts(the_city: &str) -> Result<(), sqlx::Error> {
     let first_year: i32 = get_1st_year(&the_city).await;
-    println!("Generating videos for the city of {0} starting in {1}", the_city, first_year);
+    info!("Generating videos for the city of {0} starting in {1}", the_city, first_year);
     
     let mut fps = 1;
     let _ = generate_videos(the_city, first_year, fps);
@@ -762,7 +771,7 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     let mut output_arg = format!("{}{}_{}_{}.mp4", VIDEO_FOLDER, city, period, &frames_per_second);
     cmd.arg(output_arg);
 
-    println!("Executing command: {:?}", cmd);
+    info!("Executing command: {:?}", cmd);
     let _ = cmd.execute_output().unwrap();
 
     period = "week";
@@ -775,7 +784,7 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     output_arg = format!("{}{}_{}_{}.mp4", VIDEO_FOLDER, city, period, &frames_per_second);
     cmd2.arg(&output_arg);
 
-    println!("Executing command: {:?}", cmd2);
+    info!("Executing command: {:?}", cmd2);
     let _ = cmd2.execute_output().unwrap();
 
     period = "fort";
@@ -788,14 +797,14 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
     output_arg = format!("{}{}_{}_{}.mp4", VIDEO_FOLDER, city, period, &frames_per_second);
     cmd3.arg(&output_arg);
 
-    println!("Executing command: {:?}", cmd3);
+    info!("Executing command: {:?}", cmd3);
     let output = cmd3.execute_output().unwrap();
 
     if let Some(exit_code) = output.status.code() {
         if exit_code == 0 {
-            println!("The weekly exit code is 0 (Ok)");
+            info!("The weekly exit code is 0 (Ok)");
         } else {
-            eprintln!("Error executing `{}` with in-file: {} and out-file: {}", FFMPEG_PATH, input_arg, output_arg);
+            error!("Error executing `{}` with in-file: {} and out-file: {}", FFMPEG_PATH, input_arg, output_arg);
         }
     } 
 
@@ -804,7 +813,7 @@ fn generate_videos(city: &str, start_year: i32, fps: i32) -> Result<(), Box<dyn 
 async fn generate_date_time_charts_by_city()  -> Result<(), sqlx::Error> {
     let selected_cities = select_cities("Please select the cities to GENERATE date-time charts".to_string()).await;
     for the_city in selected_cities {
-        println!("Generating date-time charts for city of {0}", the_city.clone().red());
+        info!("Generating date-time charts for city of {0}", the_city.clone().red());
         generate_date_time_charts(&the_city).await.expect("Failed to generate date-time charts");    
     }
     Ok(())
@@ -821,27 +830,27 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let mut out_file_name = String::new();
     let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
     match chart_type {
-        1 => {//println!("Generating High-Max charts for {city}");
+        1 => {debug!("Generating High-Max charts for {city}");
                 chart_title = format!("{}: 500 Hottest Daytime Temperatures", city);
                 query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
             },
-        2 => {//println!("Generating High-Min charts for {city}");
+        2 => {debug!("Generating High-Min charts for {city}");
                 chart_title = format!("{}: 500 Coolest Daytime Temperatures", city);
                 query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
             },
-        3 => {//println!("Generating Low-Max charts for {city}");
+        3 => {debug!("Generating Low-Max charts for {city}");
                 chart_title = format!("{}: 500 Coldest Nighttime Temperatures", city);
                 query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
             },
-        4 => {//println!("Generating Low-Min charts for {city}");
+        4 => {debug!("Generating Low-Min charts for {city}");
                 chart_title = format!("{}: 500 Warmest Nighttime Temperatures", city);
                 query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 500", city);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
             },
-        _ => println!("Unknown chart type"),
+        _ => error!("Unknown chart type"),
     }
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
@@ -926,7 +935,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     ).expect("Error drawing duplicate date markers");*/
 
     root.present().expect("Unable to write result to file, please make sure 'date_charts' folder exists under current dir");
-    println!("Result has been saved to {}", out_file_name);
+    info!("Result has been saved to {}", out_file_name);
 
 
     Ok(())
@@ -935,7 +944,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
 async fn generate_line_charts_by_city() -> Result<(), sqlx::Error> {
     let selected_cities = select_cities("Please select the cities to GENERATE line charts".to_string()).await;
     for the_city in selected_cities {
-        println!("Generating line charts for city of {0}", the_city.clone().red());
+        info!("Generating line charts for city of {0}", the_city.clone().red());
         generate_line_charts(&the_city).await?;    
     }
     Ok(())
@@ -948,7 +957,7 @@ async fn generate_line_charts(the_city: &str) -> Result<(), sqlx::Error> {
     match fn_get_min_max { // city_low & city_high here must be initialized in this block to make compiler happy
         Ok(_) => {let min_max: &(i32, i32) = &fn_get_min_max.unwrap();
                 city_low = min_max.0;  city_high = min_max.1; /*println!("Low: {city_low}  High: {city_high}")*/},
-        Err(e) =>  {city_low = 0; city_high = 0; eprintln!("Error getting City min max: {}",e)}
+        Err(e) =>  {city_low = 0; city_high = 0; error!("Error getting City min max: {}",e)}
     }  
     //let mut first_year: i32 = 0; 
     let first_year: i32 = get_1st_year(city).await;
@@ -960,7 +969,7 @@ async fn generate_line_charts(the_city: &str) -> Result<(), sqlx::Error> {
     Ok(())
 }
 async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
-    println!("Monthly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
+    info!("Monthly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
     for the_year in first_year..=last_year {
         let file_name = format!("line_charts/{}_{}_month.svg", city, the_year);
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
@@ -1059,7 +1068,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
     Ok(())
 }
 async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
-    println!("Fortnightly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
+    info!("Fortnightly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
     for the_year in first_year..=last_year {
         let file_name = format!("line_charts/{}_{}_fort.svg", city, the_year);
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
@@ -1146,7 +1155,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
     Ok(())
 }
 async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_low: i32, city_high: i32) -> Result<(), sqlx::Error> {
-    println!("Weekly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
+    info!("Weekly Line Charts for {city} from {first_year} to {last_year}, with low of {city_low} and high of {city_high}");
     for the_year in first_year..=last_year {
         let file_name = format!("line_charts/{}_{}_week.svg", city,the_year);
         let root = SVGBackend::new(&file_name, (1280, 960)).into_drawing_area();
@@ -1245,7 +1254,7 @@ fn split_segments(data: Vec<(i32, i32)>) -> Vec<Vec<(i32, i32)>>
         let (_point_x, point_y) = point;
         match point_y {
             point_y if point_y > 200 => {
-                //println!("Point_y > 200 found"); //verify that this condition is being hit for the expected points
+                debug!("Point_y > 200 found"); //verify that this condition is being hit for the expected points
                 if !current_segment.is_empty() {
                     segments.push(current_segment);
                     current_segment = Vec::new();   
@@ -1262,7 +1271,7 @@ fn split_segments(data: Vec<(i32, i32)>) -> Vec<Vec<(i32, i32)>>
 }
 fn f_to_c(num: f64) -> f64 {
     let result = (num - 32.0) * 5.0 / 9.0;
-    //println!("\nC = {}", result);
+    debug!("\nC = {}", result);
     result
 }
 
@@ -1285,7 +1294,7 @@ fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)
                     tdate = current_row.get(0);
                 }
                 dup_dates.insert(tdate, (current_temp as f64, count));
-                //println!("Temp = {}: Dates {} and {} are {} days apart. Count: {}. tdate: {}", current_temp, tdate, next_date, days_apart, count, tdate);
+                // FIX WHEN NEEDED debug!("Temp = {}: Dates {} and {} are {} days apart. Count: {}. tdate: {}", current_temp, tdate, next_date, days_apart, count, tdate);
             } else {
                 count = 1;
                 tdate = "1800-01-01";
@@ -1293,7 +1302,7 @@ fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)
         } // else if count > 1 push the dup date info into the hashmap and reset count and tdate
          else if count > 1 {
             dup_dates.insert(tdate, (current_temp as f64, count));
-            //println!("Non-matching temp found. Temp = {}: Count: {}. tdate: {}", current_temp, count, tdate);
+            debug!("Non-matching temp found. Temp = {}: Count: {}. tdate: {}", current_temp, count, tdate);
             count = 1;
             tdate = "1800-01-01";
          }
