@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use plotters::{prelude::*, style::full_palette::BLUE_400};
 use plotters::coord::Shift;
 use chrono::{NaiveDate, Months};
-//use fahrenheit_to_celsius::f_to_c;
 
 //use static for db connection pooling to create a single pool that can be shared across 
 //multiple functions without having to pass it around as an argument. 
@@ -987,7 +986,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
             city_low..city_high
             )
             .unwrap();
-        let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
+        let x_labels = ["|","\u{1F870} Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec \u{1F872}","|"];
         chartm.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
@@ -1061,7 +1060,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
         // **legend_area_size** is the size of the area reserved for the legend example (line), not the size of the legend text itself. If legend_area_size is set too small,
         //      the line will overlap the legend text, even if the margins are set to a large value.
         chartm.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
-            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(0.5)).label_font(("Calibri", 20)).draw().unwrap(); 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
 
         root.present().unwrap();
     }
@@ -1086,7 +1085,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             city_low..city_high
             )
             .unwrap();
-        let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
+        let x_labels = ["|","\u{1F870} Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec \u{1F872}","|"];
         chartf.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
@@ -1149,7 +1148,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             &BLUE,
             )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
         chartf.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
-            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(0.5)).label_font(("Calibri", 20)).draw().unwrap(); 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
         root.present().unwrap();
     }
     Ok(())
@@ -1173,7 +1172,7 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             city_low..city_high
             )
             .unwrap();
-        let x_labels = ["","<- Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec -","- Dec "];
+        let x_labels = ["|","\u{1F870} Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec \u{1F872}","|"];
         chartw.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
@@ -1240,7 +1239,7 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             &BLUE,
             )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
         chartw.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
-            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(0.5)).label_font(("Calibri", 20)).draw().unwrap(); 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
         root.present().unwrap();
     }
     Ok(())
