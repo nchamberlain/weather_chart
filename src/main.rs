@@ -986,7 +986,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
             city_low..city_high
             )
             .unwrap();
-        let x_labels = ["|","\u{1F870} Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec \u{1F872}","|"];
+        let x_labels = ["|","\u{1F870} Jan | Feb \u{2013}","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","\u{2014} Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","\u{2014} Nov | Dec \u{1F872}","|"];
         chartm.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
@@ -1085,7 +1085,7 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             city_low..city_high
             )
             .unwrap();
-        let x_labels = ["|","\u{1F870} Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec \u{1F872}","|"];
+        let x_labels = ["|","\u{1F870} Jan | Feb \u{2013}","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","\u{2014} Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","\u{2014} Nov | Dec \u{1F872}","|"];
         chartf.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
@@ -1172,7 +1172,7 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             city_low..city_high
             )
             .unwrap();
-        let x_labels = ["|","\u{1F870} Jan | Feb -","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","- Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","- Nov | Dec \u{1F872}","|"];
+        let x_labels = ["|","\u{1F870} Jan| Feb \u{2013}","- Feb | Mar -","- Mar | Apr -","- Apr | May -","- May | Jun -","- Jun | Jul -","\u{2014} Jul | Aug -","- Aug | Sep -","- Sep | Oct -","- Oct | Nov -","\u{2014} Nov | Dec \u{1F872}","|"];
         chartw.configure_mesh()
             .y_max_light_lines(5)// it still makes best guess at optimum number of minor lines, but it won't exceed 5
             .y_label_style(("sans-serif", 20).into_font())
