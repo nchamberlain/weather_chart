@@ -84,24 +84,24 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
             .prompt()
             .expect("Failed to select a database action");
 
-        // each selected action calls a separate tokio runtime so the must each be marked with #[tokio::main]
         if select == "List all cities" {
-            trace!("Listing all cities...");
+            debug!("Listing all cities...");
             list_all_cities().await.expect("Failed to list all cities");
         } 
           else if select == "Generate BAR Charts by CITY" {
+            debug!("Generate BAR Charts by CITY");
             generate_bar_charts_by_city().await.expect("Failed to generate bar charts by city");
         }
           else if select == "Generate LINE Charts by CITY" {
-            trace!("Generate LINE Charts by CITY");
+            debug!("Generate LINE Charts by CITY");
             generate_line_charts_by_city().await.expect("Failed to generate line charts by city");
         }
           else if select == "Generate Wide Date-Temp Charts by CITY" {
-            trace!("Generate Wide Date-Temp Charts by CITY");
+            debug!("Generate Wide Date-Temp Charts by CITY");
             generate_date_time_charts_by_city().await.expect("Failed to generate line charts by city");
         }
           else if select == "Generate Videos from Charts" {
-            trace!("Generate Videos from Charts");
+            debug!("Generate Videos from Charts");
             generate_videos_by_city().await.expect("Failed to generate videos from charts");
         }  
           else if select == "Exit" {
