@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use std::process::Command;
 use std::io::{self, Write};
 use std::collections::HashMap;
-use plotters::{prelude::*, style::full_palette::BLUE_400};
+use plotters::{prelude::*, style::RGBAColor, style::full_palette::BLUE_400};
 use plotters::coord::Shift;
 use chrono::{NaiveDate, Months};
 
@@ -698,7 +698,7 @@ async fn get_city_min_max(city: &str) -> Result<(i32, i32), sqlx::Error> {
     Ok((lo, hi))
 }
 async fn get_temps(tperiod: &str, city: &str, year: i32) -> Result<Vec<MySqlRow>, sqlx::Error> {
-    let query_string = format!("SELECT tyear, {}, tmax, tmin FROM {} WHERE tyear = {}", tperiod, city, year ); // Adjust table name as needed
+    let query_string = format!("SELECT tyear, {}, tmax, tmin, mmax, mmin FROM {} WHERE tyear = {}", tperiod, city, year ); // Adjust table name as needed
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
         .await?; // had to make this function return a Result to use the ? operator
@@ -1005,10 +1005,14 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
 
         let hi_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmax").unwrap_or(0)).collect();
         let lo_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmin").unwrap_or(0)).collect();
+        let med_hi: Vec<i32> = temp_result.iter().map(|row| row.try_get("mmax").unwrap_or(0)).collect();
+        let med_lo: Vec<i32> = temp_result.iter().map(|row| row.try_get("mmin").unwrap_or(0)).collect();
 
         let high_vec: Vec<(i32, i32)> = month_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
         let low_vec: Vec<(i32, i32)> = month_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
-
+        let med_hi_vec: Vec<(i32, i32)> = month_positions.iter().zip(med_hi.iter()).map(|(&a, &b)| (a, b)).collect();
+        let med_lo_vec: Vec<(i32, i32)> = month_positions.iter().zip(med_lo.iter()).map(|(&a, &b)| (a, b)).collect();
+        //draw the high temps 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
             chartm.draw_series(LineSeries::new(
@@ -1026,11 +1030,28 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
                 },
             )).unwrap();
         }
+        //draw the high median points ONLY 
+        let segments = split_segments(med_hi_vec.clone());
+        for seg in segments {
+            chartm.draw_series(PointSeries::of_element(
+                seg,
+                1,
+                &MAGENTA,
+                &|c, _s, _st| {
+                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(230,74,25,0.5)) 
+                    + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
+                ;},
+            )).unwrap();
+        }
+        // after drawing segments, draw the legend from fake vector to avoid multiple entries for various segments
         let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
         chartm.draw_series(LineSeries::new(
             fake_high_data,
             &RED,
             )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
+
+    // start drawing the low temps
         let segments = split_segments(low_vec.clone());
         for seg in segments {
             chartm.draw_series(LineSeries::new(
@@ -1048,6 +1069,20 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
                 },
             )).unwrap();
         }
+        //draw the low median points ONLY 
+        let segments = split_segments(med_lo_vec.clone());
+        for seg in segments {
+            chartm.draw_series(PointSeries::of_element(
+                seg,
+                1,
+                &MAGENTA,
+                &|c, _s, _st| {
+                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(84,110,122,0.5)) 
+                    + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
+                ;},
+            )).unwrap();
+        }
         let fake_low_data = vec![(624, 0)];
         chartm.draw_series(LineSeries::new(
             fake_low_data,
@@ -1059,7 +1094,7 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
         // **margin** should be called padding because it sets the distance between legend elements & legend border and NOT the distance between legend and chart edge
         // **legend_area_size** is the size of the area reserved for the legend example (line), not the size of the legend text itself. If legend_area_size is set too small,
         //      the line will overlap the legend text, even if the margins are set to a large value.
-        chartm.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+        chartm.configure_series_labels().position(SeriesLabelPosition::Coordinate(1046, 1)).margin(8) 
             .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
 
         root.present().unwrap();
@@ -1103,9 +1138,13 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
 
         let hi_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmax").unwrap_or(0)).collect();
         let lo_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmin").unwrap_or(0)).collect();
+        let med_hi: Vec<i32> = temp_result.iter().map(|row| row.try_get("mmax").unwrap_or(0)).collect();
+        let med_lo: Vec<i32> = temp_result.iter().map(|row| row.try_get("mmin").unwrap_or(0)).collect();
 
         let high_vec: Vec<(i32, i32)> = fort_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
         let low_vec: Vec<(i32, i32)> = fort_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+        let med_hi_vec: Vec<(i32, i32)> = fort_positions.iter().zip(med_hi.iter()).map(|(&a, &b)| (a, b)).collect();
+        let med_lo_vec: Vec<(i32, i32)> = fort_positions.iter().zip(med_lo.iter()).map(|(&a, &b)| (a, b)).collect();
 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
@@ -1120,6 +1159,20 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                     + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
                     + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()); //-4,-12 are fudges to position the text better
                 },
+            )).unwrap();
+        }
+        //draw the high median points ONLY 
+        let segments = split_segments(med_hi_vec.clone());
+        for seg in segments {
+            chartf.draw_series(PointSeries::of_element(
+                seg,
+                1,
+                &MAGENTA,
+                &|c, _s, _st| {
+                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(230,74,25,0.5)) 
+                    + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
+                ;},
             )).unwrap();
         }
         let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
@@ -1142,12 +1195,27 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        //draw the low median points ONLY 
+        let segments = split_segments(med_lo_vec.clone());
+        for seg in segments {
+            chartf.draw_series(PointSeries::of_element(
+                seg,
+                1,
+                &MAGENTA,
+                &|c, _s, _st| {
+                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(84,110,122,0.5)) 
+                    + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
+                ;},
+            )).unwrap();
+        }
+
         let fake_low_data = vec![(624, 0)];
         chartf.draw_series(LineSeries::new(
             fake_low_data,
             &BLUE,
             )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
-        chartf.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+        chartf.configure_series_labels().position(SeriesLabelPosition::Coordinate(1046, 1)).margin(8) 
             .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
         root.present().unwrap();
     }
@@ -1190,9 +1258,13 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
 
         let hi_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmax").unwrap_or(0)).collect();
         let lo_temps: Vec<i32> = temp_result.iter().map(|row| row.try_get("tmin").unwrap_or(0)).collect();
+        let med_hi: Vec<i32> = temp_result.iter().map(|row| row.try_get("mmax").unwrap_or(0)).collect();
+        let med_lo: Vec<i32> = temp_result.iter().map(|row| row.try_get("mmin").unwrap_or(0)).collect();
 
         let high_vec: Vec<(i32, i32)> = week_positions.iter().zip(hi_temps.iter()).map(|(&a, &b)| (a, b)).collect();
         let low_vec: Vec<(i32, i32)> = week_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
+        let med_hi_vec: Vec<(i32, i32)> = week_positions.iter().zip(med_hi.iter()).map(|(&a, &b)| (a, b)).collect();
+        let med_lo_vec: Vec<(i32, i32)> = week_positions.iter().zip(med_lo.iter()).map(|(&a, &b)| (a, b)).collect();
 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
@@ -1211,6 +1283,21 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+                //draw the high median points ONLY 
+        let segments = split_segments(med_hi_vec.clone());
+        for seg in segments {
+            chartw.draw_series(PointSeries::of_element(
+                seg,
+                1,
+                &MAGENTA,
+                &|c, _s, _st| {
+                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(230,74,25,0.5)) 
+                    + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
+                ;},
+            )).unwrap();
+        }
+
         let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for multiple segments
         chartw.draw_series(LineSeries::new(
             fake_high_data,
@@ -1233,12 +1320,27 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        //draw the low median points ONLY 
+        let segments = split_segments(med_lo_vec.clone());
+        for seg in segments {
+            chartw.draw_series(PointSeries::of_element(
+                seg,
+                1,
+                &MAGENTA,
+                &|c, _s, _st| {
+                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(84,110,122,0.5)) 
+                    + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
+                ;},
+            )).unwrap();
+        }
+        // draw the legend
         let fake_low_data = vec![(624, 0)];
         chartw.draw_series(LineSeries::new(
             fake_low_data,
             &BLUE,
             )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
-        chartw.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+        chartw.configure_series_labels().position(SeriesLabelPosition::Coordinate(1046, 1)).margin(8) 
             .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
         root.present().unwrap();
     }
