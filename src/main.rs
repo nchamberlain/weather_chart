@@ -2,14 +2,14 @@ use colorize::AnsiColor;
 use execute::Execute;
 use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, MySql, Pool, Row};
 use dotenvy::dotenv;
-use log::{error, warn, info, debug, trace};
+use log::{error, warn, info, debug, trace, log_enabled, Level};
 use env_logger;
 use std::env;
 use std::sync::OnceLock;
 use std::process::Command;
 use std::io::{self, Write};
 use std::collections::HashMap;
-use plotters::{prelude::*, style::RGBAColor, style::full_palette::BLUE_400};
+use plotters::{prelude::*, style::RGBAColor};
 use plotters::coord::Shift;
 use chrono::{NaiveDate, Months};
 
@@ -59,11 +59,13 @@ async fn main() -> Result<(), sqlx::Error> {
         .expect("Failed to initialize database pool");
 
     let result = get_user_choice();
-    trace!("Trace level is active (most detailed)");
-    debug!("debug level is active (lots of details)");
-    info!("info is active (std setting)");
-    warn!("warning level is set (typical for production)");
-    error!("only errors reported (for mature production only)");
+    if log_enabled!(Level::Trace) {
+        trace!("Trace level is active (most detailed)");
+        debug!("debug level is active (lots of details)");
+        info!("info is active (std setting)");
+        warn!("warning level is set (typical for production)");
+        error!("only errors reported (for mature production only)");
+    }
 
     Ok((result.await)?)
 }
@@ -904,10 +906,12 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                      3, BLUE.filled())})
             ).expect("Error drawing series");
     // display dup data for diagnostic purposes
-    //for item in &dup_dates {
-    //    println!("Duplicate date found: {} for temp: {} count: {}", item.0, item.1.0, item.1.1);
-    //}
-    chart.draw_series(PointSeries::of_element(dup_dates, 4, &BLUE_400,  
+    if log_enabled!(Level::Debug) {
+        for item in &dup_dates {
+            debug!("Duplicate date found: {} for temp: {} count: {}", item.0, item.1.0, item.1.1);
+        }
+    }
+    chart.draw_series(PointSeries::of_element(dup_dates, 4, RGBAColor(0,115,153,0.99).filled(),  
         &|item, s, st| {
                 let date_str = item.0;
                 let temp = item.1.0;
@@ -919,24 +923,9 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 + Text::new(format!("{}", count), (-2,4),("sans-serif", 12).into_font());
             },
     )).unwrap();
-    /*chart.draw_series(
-        dup_dates.iter()
-            .map(|item| {
-                let date_str = item.0;
-                let temp = item.1.0;
-                let count = item.1.1;
-                TriangleMarker::new(
-                    (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp),
-                    4,
-                    RED.filled(),
-                )
-            })
-    ).expect("Error drawing duplicate date markers");*/
 
     root.present().expect("Unable to write result to file, please make sure 'date_charts' folder exists under current dir");
     info!("Result has been saved to {}", out_file_name);
-
-
     Ok(())
 }
 
@@ -1012,17 +1001,17 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
         let low_vec: Vec<(i32, i32)> = month_positions.iter().zip(lo_temps.iter()).map(|(&a, &b)| (a, b)).collect();
         let med_hi_vec: Vec<(i32, i32)> = month_positions.iter().zip(med_hi.iter()).map(|(&a, &b)| (a, b)).collect();
         let med_lo_vec: Vec<(i32, i32)> = month_positions.iter().zip(med_lo.iter()).map(|(&a, &b)| (a, b)).collect();
-        //draw the high temps 
+    //draw the high temps 
         let segments = split_segments(high_vec.clone());
         for seg in segments {
-            chartm.draw_series(LineSeries::new(
+            chartm.draw_series(LineSeries::new( //draw line segments for high temps
                 seg.clone(),
-                &RED,
+                &RGBAColor(219,20,60,0.99) //Medium Bright Red
             )).unwrap();
-            chartm.draw_series(PointSeries::of_element(
+            chartm.draw_series(PointSeries::of_element( //draw points for high temps
                 seg,
                 2,
-                &RED,
+                &RGBAColor(126,12,35,0.99), //dark bright Red
                 &|c, s, st| {
                     return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
                     + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
@@ -1030,38 +1019,43 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
                 },
             )).unwrap();
         }
+        //draw the average legend
+        let fake_high_avgs = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
+        chartm.draw_series(LineSeries::new( // draw legend for high temps
+            fake_high_avgs,
+            &RGBAColor(219,20,60,0.99), //medium bright red
+            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RGBAColor(219,20,60,0.99)));
         //draw the high median points ONLY 
         let segments = split_segments(med_hi_vec.clone());
         for seg in segments {
-            chartm.draw_series(PointSeries::of_element(
+            chartm.draw_series(PointSeries::of_element( //draw rectangles for high median temps
                 seg,
                 1,
-                &MAGENTA,
-                &|c, _s, _st| {
-                    return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(230,74,25,0.5)) 
+                &RGBAColor(126,12,92,0.9), //dark bright pink
+                &|c, _s, st| {
+                    return EmptyElement::at(c)   
+                    + Rectangle::new([(-8,0),(10,1)], st.filled()) 
                     + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
                 ;},
             )).unwrap();
         }
-        // after drawing segments, draw the legend from fake vector to avoid multiple entries for various segments
-        let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
-        chartm.draw_series(LineSeries::new(
-            fake_high_data,
-            &RED,
-            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
-
-    // start drawing the low temps
+        //draw the median legend
+        let fake_high_median = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
+        chartm.draw_series(LineSeries::new( // draw median high temp rectangles for legend
+            fake_high_median,
+            &RGBAColor(126,12,92,0.9), //dark bright pink
+            )).unwrap().label("High Median Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RGBAColor(66,31,173,0.9)));
+    // draw the low temps
         let segments = split_segments(low_vec.clone());
         for seg in segments {
-            chartm.draw_series(LineSeries::new(
+            chartm.draw_series(LineSeries::new( //draw line segments for low temps
                 seg.clone(),
-                &BLUE,
+                &RGBAColor(0,94,184,0.99) // Ocean Blue for low temp line segments
             )).unwrap();
-            chartm.draw_series(PointSeries::of_element(
+            chartm.draw_series(PointSeries::of_element( //draw circles for low temps
                 seg,
                 2,
-                &BLUE,
+                &RGBAColor(0,62,120,0.99), //dark ocean blue for low temp dots
                 &|c, s, st| {
                     return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
                     + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
@@ -1069,34 +1063,45 @@ async fn make_monthly_charts(city: &str, first_year: i32, last_year: i32, city_l
                 },
             )).unwrap();
         }
+        //draw the low avg legend
+        let fake_low_avgs = vec![(624, 0)];
+        chartm.draw_series(LineSeries::new(
+            fake_low_avgs,
+            &RGBAColor(0,94,184,0.99), //ocean blue for legend
+            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RGBAColor(0,115,153,0.99)));
         //draw the low median points ONLY 
         let segments = split_segments(med_lo_vec.clone());
         for seg in segments {
             chartm.draw_series(PointSeries::of_element(
                 seg,
                 1,
-                &MAGENTA,
+                &RGBAColor(10,163,207,0.9), //dark bright cyan
                 &|c, _s, _st| {
                     return EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-                    + Rectangle::new([(-4,0),(6,1)], RGBAColor(84,110,122,0.5)) 
+                    + Rectangle::new([(-8,0),(10,1)], RGBAColor(10,163,207,0.9)) 
                     + Text::new(format!("{:?}", c.1), (-4, -12), ("sans-serif", 12).into_font()) 
                 ;},
             )).unwrap();
         }
-        let fake_low_data = vec![(624, 0)];
+        //draw the low median legend
+        let fake_low_median = vec![(624, 0)];
         chartm.draw_series(LineSeries::new(
-            fake_low_data,
-            &BLUE,
-            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
+            fake_low_median,
+            &RGBAColor(10,163,207,0.9), //dark bright cyan for legend
+            )).unwrap().label("Low Median Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RGBAColor(10,163,207,0.9)));
         // The labels in the legend are set when the series are drawn, not when legend is configured. The chart.configure_series_labels() must be called after all series
         //     that you want included in the legend are drawn, not before. 
         // The labels in legend can be arbitrarily long and the legend will automatically adjust to fit the labels.
         // **margin** should be called padding because it sets the distance between legend elements & legend border and NOT the distance between legend and chart edge
         // **legend_area_size** is the size of the area reserved for the legend example (line), not the size of the legend text itself. If legend_area_size is set too small,
         //      the line will overlap the legend text, even if the margins are set to a large value.
-        chartm.configure_series_labels().position(SeriesLabelPosition::Coordinate(1046, 1)).margin(8) 
-            .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
-
+        chartm.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
+            .legend_area_size(25).border_style(BLUE).background_style(WHITE).label_font(("Calibri", 20)).draw().unwrap(); 
+        // draw the circle on the legend for high temps - has to come after or legend covers it
+        root.draw(&Circle::new((1098,80), 2, RGBAColor(126,12,35,0.99).filled())).unwrap();
+        // draw the circle on the legend for high temps
+        root.draw(&Circle::new((1099,130), 2, RGBAColor(0,62,120,0.99).filled())).unwrap();
+        
         root.present().unwrap();
     }
     Ok(())
@@ -1161,6 +1166,12 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        //draw the average high legend
+        let fake_high_avgs = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
+        chartf.draw_series(LineSeries::new(
+            fake_high_avgs,
+            &RED,
+            )).unwrap().label("Avg High Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
         //draw the high median points ONLY 
         let segments = split_segments(med_hi_vec.clone());
         for seg in segments {
@@ -1175,11 +1186,13 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 ;},
             )).unwrap();
         }
-        let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
+        //draw median legend
+        let fake_high_med = vec![(0, 0)]; //have to do it separately to avoid multiple entries for various segments
         chartf.draw_series(LineSeries::new(
-            fake_high_data,
+            fake_high_med,
             &RED,
-            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
+            )).unwrap().label("Median High Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
+        // draw low temps
         let segments = split_segments(low_vec.clone());
         for seg in segments {
             chartf.draw_series(LineSeries::new(
@@ -1195,6 +1208,11 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        let fake_low_avgs = vec![(624, 0)];
+        chartf.draw_series(LineSeries::new(
+            fake_low_avgs,
+            &BLUE,
+            )).unwrap().label("Avg Low Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
         //draw the low median points ONLY 
         let segments = split_segments(med_lo_vec.clone());
         for seg in segments {
@@ -1209,14 +1227,18 @@ async fn make_fortly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 ;},
             )).unwrap();
         }
-
-        let fake_low_data = vec![(624, 0)];
+        let fake_low_med = vec![(624, 0)];
         chartf.draw_series(LineSeries::new(
-            fake_low_data,
+            fake_low_med,
             &BLUE,
-            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
-        chartf.configure_series_labels().position(SeriesLabelPosition::Coordinate(1046, 1)).margin(8) 
+            )).unwrap().label("Median Low Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
+        chartf.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
             .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
+        // draw the circle on the legend for high temps - has to come after or legend covers it
+        root.draw(&Circle::new((1098,80), 2, RGBAColor(126,12,35,0.99).filled())).unwrap();
+        // draw the circle on the legend for high temps
+        root.draw(&Circle::new((1099,130), 2, RGBAColor(0,62,120,0.99).filled())).unwrap();
+
         root.present().unwrap();
     }
     Ok(())
@@ -1283,7 +1305,12 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
-                //draw the high median points ONLY 
+        let fake_high_avg = vec![(0, 0)]; //have to do it separately to avoid multiple entries for multiple segments
+        chartw.draw_series(LineSeries::new(
+            fake_high_avg,
+            &RED,
+            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));        
+        //draw the high median points ONLY 
         let segments = split_segments(med_hi_vec.clone());
         for seg in segments {
             chartw.draw_series(PointSeries::of_element(
@@ -1298,11 +1325,12 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
             )).unwrap();
         }
 
-        let fake_high_data = vec![(0, 0)]; //have to do it separately to avoid multiple entries for multiple segments
+        let fake_high_med = vec![(0, 0)]; //have to do it separately to avoid multiple entries for multiple segments
         chartw.draw_series(LineSeries::new(
-            fake_high_data,
+            fake_high_med,
             &RED,
-            )).unwrap().label("High Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
+            )).unwrap().label("High Median Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &RED));
+        // draw the average low temps
         let segments = split_segments(low_vec.clone());
         for seg in segments {
             chartw.draw_series(LineSeries::new(
@@ -1320,6 +1348,12 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 },
             )).unwrap();
         }
+        // draw the legend
+        let fake_low_avg = vec![(624, 0)];
+        chartw.draw_series(LineSeries::new(
+            fake_low_avg,
+            &BLUE,
+            )).unwrap().label("Avg Low Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
         //draw the low median points ONLY 
         let segments = split_segments(med_lo_vec.clone());
         for seg in segments {
@@ -1334,14 +1368,19 @@ async fn make_weekly_charts(city: &str, first_year: i32, last_year: i32, city_lo
                 ;},
             )).unwrap();
         }
-        // draw the legend
-        let fake_low_data = vec![(624, 0)];
+        // draw the median legend
+        let fake_low_med = vec![(624, 0)];
         chartw.draw_series(LineSeries::new(
-            fake_low_data,
+            fake_low_med,
             &BLUE,
-            )).unwrap().label("Low Avg Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
-        chartw.configure_series_labels().position(SeriesLabelPosition::Coordinate(1046, 1)).margin(8) 
+            )).unwrap().label("Median Low Temps").legend(|(x,y)| PathElement::new(vec![(x,y),(x+20,y)], &BLUE));
+        chartw.configure_series_labels().position(SeriesLabelPosition::UpperRight).margin(8) 
             .legend_area_size(25).border_style(BLUE).background_style(WHITE.mix(1.0)).label_font(("Calibri", 20)).draw().unwrap(); 
+        // draw the circle on the legend for high temps - has to come after or legend covers it
+        root.draw(&Circle::new((1098,80), 2, RGBAColor(126,12,35,0.99).filled())).unwrap();
+        // draw the circle on the legend for high temps
+        root.draw(&Circle::new((1099,130), 2, RGBAColor(0,62,120,0.99).filled())).unwrap();
+
         root.present().unwrap();
     }
     Ok(())
