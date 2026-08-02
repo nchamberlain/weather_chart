@@ -830,26 +830,27 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let mut chart_title = String::new();
     let mut out_file_name = String::new();
     let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
+    let query_limit = 10000;
     //let city_fmt: String = city.replace("_", " ");
     match chart_type {
         1 => {debug!("Generating High-Max charts for {city}");
-                chart_title = format!("{}: 8000 Hottest Daytime Temperatures", city.replace("_", " "));
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 8000", city);
+                chart_title = format!("{}: {} Hottest Daytime Temperatures", city.replace("_", " "), query_limit);
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
             },
         2 => {debug!("Generating High-Min charts for {city}");
-                chart_title = format!("{}: 8000 Coolest Daytime Temperatures", city.replace("_", " "));
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 8000", city);
+                chart_title = format!("{}: {} Coolest Daytime Temperatures", city.replace("_", " "), query_limit);
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
             },
         3 => {debug!("Generating Low-Max charts for {city}");
-                chart_title = format!("{}: 8000 Coldest Nighttime Temperatures", city.replace("_", " "));
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 8000", city);
+                chart_title = format!("{}: {} Coldest Nighttime Temperatures", city.replace("_", " "), query_limit);
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
             },
         4 => {debug!("Generating Low-Min charts for {city}");
-                chart_title = format!("{}: 8000 Warmest Nighttime Temperatures", city.replace("_", " "));
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 8000", city);
+                chart_title = format!("{}: {} Warmest Nighttime Temperatures", city.replace("_", " "), query_limit);
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
             },
         _ => error!("Unknown chart type"),
@@ -869,7 +870,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let latest_date = NaiveDate::parse_from_str(latest_date_str, "%Y-%m-%d").unwrap_or(NaiveDate::from_ymd_opt(2070, 1, 1).unwrap()) + Months::new(11); // add 11 month to give some padding on the right side of the chart
     let full_chart_title = format!("{}, {} to {}", chart_title, earliest_date_str, latest_date_str);
 
-    let root = SVGBackend::new(&out_file_name, (7680, 960)).into_drawing_area();
+    let root = SVGBackend::new(&out_file_name, (15360, 1920)).into_drawing_area();
     let _ = root.fill(&WHITE);
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
@@ -913,7 +914,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
             debug!("Duplicate date found: {} for temp: {} count: {}", item.0, item.1.0, item.1.1);
         }
     }
-    chart.draw_series(PointSeries::of_element(dup_dates, 4, RGBColor(0,115,153).filled(),  
+    chart.draw_series(PointSeries::of_element(dup_dates, 4, RGBColor(0,115,153).mix(0.6).filled(),  
         &|item, s, st| {
                 let date_str = item.0;
                 let temp = item.1.0;
