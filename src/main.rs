@@ -830,25 +830,26 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let mut chart_title = String::new();
     let mut out_file_name = String::new();
     let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
+    //let city_fmt: String = city.replace("_", " ");
     match chart_type {
         1 => {debug!("Generating High-Max charts for {city}");
-                chart_title = format!("{}: 500 Hottest Daytime Temperatures", city);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 500", city);
+                chart_title = format!("{}: 8000 Hottest Daytime Temperatures", city.replace("_", " "));
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT 8000", city);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
             },
         2 => {debug!("Generating High-Min charts for {city}");
-                chart_title = format!("{}: 500 Coolest Daytime Temperatures", city);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 500", city);
+                chart_title = format!("{}: 8000 Coolest Daytime Temperatures", city.replace("_", " "));
+                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT 8000", city);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
             },
         3 => {debug!("Generating Low-Max charts for {city}");
-                chart_title = format!("{}: 500 Coldest Nighttime Temperatures", city);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 500", city);
+                chart_title = format!("{}: 8000 Coldest Nighttime Temperatures", city.replace("_", " "));
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT 8000", city);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
             },
         4 => {debug!("Generating Low-Min charts for {city}");
-                chart_title = format!("{}: 500 Warmest Nighttime Temperatures", city);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 500", city);
+                chart_title = format!("{}: 8000 Warmest Nighttime Temperatures", city.replace("_", " "));
+                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT 8000", city);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
             },
         _ => error!("Unknown chart type"),
@@ -866,12 +867,13 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let latest_date_str = rows.iter().map(|row| row.get::<&str, _>(0)).max().unwrap_or("2070-01-01");
     let earliest_date = NaiveDate::parse_from_str(earliest_date_str, "%Y-%m-%d").unwrap_or(NaiveDate::from_ymd_opt(1870, 1, 1).unwrap()) - Months::new(11); // subtract 11 month to give some padding on the left side of the chart
     let latest_date = NaiveDate::parse_from_str(latest_date_str, "%Y-%m-%d").unwrap_or(NaiveDate::from_ymd_opt(2070, 1, 1).unwrap()) + Months::new(11); // add 11 month to give some padding on the right side of the chart
+    let full_chart_title = format!("{}, {} to {}", chart_title, earliest_date_str, latest_date_str);
 
-    let root = SVGBackend::new(&out_file_name, (1920, 480)).into_drawing_area();
+    let root = SVGBackend::new(&out_file_name, (7680, 960)).into_drawing_area();
     let _ = root.fill(&WHITE);
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
-        .caption(chart_title, ("sans-serif", 36),)
+        .caption(full_chart_title, ("sans-serif", 36),)
         .set_label_area_size(LabelAreaPosition::Left, 60)
         .set_label_area_size(LabelAreaPosition::Right, 60)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
@@ -903,7 +905,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 let temp: i32 = row.get(1);
                 Circle::new(
                 (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp as f64),
-                     3, BLUE.filled())})
+                     2, BLUE.filled())})
             ).expect("Error drawing series");
     // display dup data for diagnostic purposes
     if log_enabled!(Level::Debug) {
@@ -919,7 +921,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 let xy = (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp);
                 return EmptyElement::at(xy)
                 //+ TriangleMarker::new((0,0), s + count +2, st.filled())
-                + Circle::new((0,0), s + count + 2, st.filled())
+                + Circle::new((0,0), s + count + 1, st.filled())
                 + Text::new(format!("{}", count), (-2,4),("sans-serif", 12).into_font());
             },
     )).unwrap();
@@ -950,7 +952,7 @@ async fn generate_line_charts(the_city: &str) -> Result<(), sqlx::Error> {
     //let mut first_year: i32 = 0; 
     let first_year: i32 = get_1st_year(city).await;
     let last_year: i32 = get_end_year(city).await;
-
+    //I was going to make these run in parallel but svgs run so fast that it doesn't matter.
     make_monthly_charts(city, first_year, last_year, city_low, city_high).await?;
     make_fortly_charts(city, first_year, last_year, city_low, city_high).await?;
     make_weekly_charts(city, first_year, last_year, city_low, city_high).await?;
@@ -1428,7 +1430,7 @@ fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)
         //let next_date: &str = next_row.get(0);
         if current_temp == next_temp { // ONLY process days with matching temps
             let days_apart = dates_diff_in_days(current_row.get(0), next_row.get(0));
-            if days_apart < 90 {
+            if days_apart < 45 {
                 count += 1;
                 if tdate == "1800-01-01" { //this check preserves original tdate with subsequent readings that will appear in the same dot-space
                     tdate = current_row.get(0);
