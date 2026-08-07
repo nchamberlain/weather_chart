@@ -73,6 +73,7 @@ async fn main() -> Result<(), sqlx::Error> {
 async fn get_user_choice() -> Result<(), sqlx::Error>{
     let choices = vec![
         "List all cities",
+        "Generate Range Charts",
         "Generate BAR Charts by CITY",
         "Generate LINE Charts by CITY",
         "Generate Wide Date-Temp Charts by CITY",
@@ -90,6 +91,10 @@ async fn get_user_choice() -> Result<(), sqlx::Error>{
             debug!("Listing all cities...");
             list_all_cities().await.expect("Failed to list all cities");
         } 
+          else if select == "Generate Range Charts" {
+            debug!("Generate Range Charts");
+            generate_range_charts().await.expect("Failed to generate range charts");
+        }       
           else if select == "Generate BAR Charts by CITY" {
             debug!("Generate BAR Charts by CITY");
             generate_bar_charts_by_city().await.expect("Failed to generate bar charts by city");
@@ -157,6 +162,30 @@ async fn select_cities(message: String) -> Vec<String> {
         .expect("Failed to select cities");
     return selected_cities
 }
+async fn generate_range_charts() -> Result<(), sqlx::Error> {
+    let selected_cities = select_cities("Please select the Cities to generate Range Charts".to_string()).await;
+
+    for the_city in selected_cities {
+        info!("Selected RANGE chart for the city of {0}", the_city.clone().red());
+        generate_city_range_charts(&the_city).await?;    
+    }
+    Ok(())
+}
+async fn generate_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
+    debug!("Generating one range chart: {0}", the_city);
+    let city  = the_city;
+    let first_year: i32 = get_1st_year(&the_city).await;
+    let last_year: i32 = get_end_year(&the_city).await;
+
+    info!("  Generating range chart for {city} from {first_year} to {last_year}"); 
+    /*for the_year in first_year..=last_year {
+        print!("{the_year},");
+        io::stdout().flush().unwrap(); // force flush now
+        generate_range_chart_for_year(city, the_year).await?;
+    }*/
+    Ok(())
+}
+
 async fn generate_bar_charts_by_city() -> Result<(), sqlx::Error> {
     let selected_cities = select_cities("Please select the cities to generate Bar Charts".to_string()).await;
 
