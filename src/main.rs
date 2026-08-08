@@ -1,3 +1,5 @@
+mod freq_chart;
+use freq_chart::draw_freq_chart;
 use colorize::AnsiColor;
 use execute::Execute;
 use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, MySql, Pool, Row};
@@ -135,6 +137,7 @@ async fn list_all_cities() -> Result<(), sqlx::Error> {
     Ok(())
 }
 async fn list_cities() -> Result<Vec<MySqlRow>, sqlx::Error> {
+    debug!("Selected List All Cities in city_names table");
     let query_string = format!("SELECT name_of_city FROM city_names ORDER by name_of_city asc;"); 
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
         .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
@@ -142,6 +145,7 @@ async fn list_cities() -> Result<Vec<MySqlRow>, sqlx::Error> {
     Ok(rows)
 }
 async fn select_cities(message: String) -> Vec<String> {
+    debug!("The select cities function is being run");
     let city_list_result: Result<Vec<MySqlRow>, sqlx::Error> = list_cities().await;
     let mut cities: Vec<String> = Vec::new();
     
@@ -166,7 +170,7 @@ async fn generate_range_charts() -> Result<(), sqlx::Error> {
     let selected_cities = select_cities("Please select the Cities to generate Range Charts".to_string()).await;
 
     for the_city in selected_cities {
-        info!("Selected RANGE chart for the city of {0}", the_city.clone().red());
+        debug!("Selected RANGE chart for the city of {0}", the_city.clone().red());
         generate_city_range_charts(&the_city).await?;    
     }
     Ok(())
@@ -177,12 +181,8 @@ async fn generate_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
     let first_year: i32 = get_1st_year(&the_city).await;
     let last_year: i32 = get_end_year(&the_city).await;
 
-    info!("  Generating range chart for {city} from {first_year} to {last_year}"); 
-    /*for the_year in first_year..=last_year {
-        print!("{the_year},");
-        io::stdout().flush().unwrap(); // force flush now
-        generate_range_chart_for_year(city, the_year).await?;
-    }*/
+    info!("Generating range chart for {city} from {first_year} to {last_year}"); 
+    draw_freq_chart(the_city, first_year, last_year).expect("Failed to draw frequency chart");
     Ok(())
 }
 

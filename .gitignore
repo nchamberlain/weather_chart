@@ -11,6 +11,7 @@ charts/
 bar_charts/
 date_charts/
 line_charts/
+freq_charts/
 imgs/
 video/*.*
 # Bits of stuff that I want to refer to now and then, but don't want to save in the repository
