@@ -181,8 +181,9 @@ async fn generate_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
     let first_year: i32 = get_1st_year(&the_city).await;
     let last_year: i32 = get_end_year(&the_city).await;
 
-    info!("Generating range chart for {city} from {first_year} to {last_year}"); 
-    draw_freq_chart(the_city, first_year, last_year).expect("Failed to draw frequency chart");
+    info!("Generating temp range frequency chart for {city} from {first_year} to {last_year}"); 
+    let rows = get_temp_ranges(city).await?;
+    draw_freq_chart(the_city, first_year, last_year, rows).expect("Failed to draw frequency chart");
     Ok(())
 }
 
@@ -727,6 +728,32 @@ async fn get_city_min_max(city: &str) -> Result<(i32, i32), sqlx::Error> {
     let hi: i32 = rows[0].get(1);
 
     Ok((lo, hi))
+}
+async fn get_temp_ranges(city: &str) -> Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> {
+    let query_string = format!("SELECT * FROM {}_week_ranges", city); // Adjust table name as needed
+    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
+        .await?; // had to make this function return a Result to use the ? operator
+    if rows.is_empty() {
+        error!("No data found for city: {}", city);
+        return Err(sqlx::Error::RowNotFound);
+    }
+    if log_enabled!(Level::Debug) {
+        let first_row = &rows[0];
+        let yr: i32 = first_row.get("tyear");
+        let frz: i32 = first_row.get("count_freezing");
+        let c30s: i32 = first_row.get("count_30s");
+        let c40s: i32 = first_row.get("count_40s");
+        let c50s: i32 = first_row.get("count_50s");
+        let c60s: i32 = first_row.get("count_60s");
+        let c70s: i32 = first_row.get("count_70s");
+        let c80s: i32 = first_row.get("count_80s");
+        let c90s: i32 = first_row.get("count_90s");
+        let c100s: i32 = first_row.get("count_100s");
+        info!("Temp freqs for {city} year {yr}: {frz}, {c30s}, {c40s}, {c50s}, {c60s}, {c70s}, {c80s}, {c90s}, {c100s}");
+    }
+
+    Ok(rows)
 }
 async fn get_temps(tperiod: &str, city: &str, year: i32) -> Result<Vec<MySqlRow>, sqlx::Error> {
     let query_string = format!("SELECT tyear, {}, tmax, tmin, mmax, mmin FROM {} WHERE tyear = {}", tperiod, city, year ); // Adjust table name as needed

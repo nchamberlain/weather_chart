@@ -1,23 +1,26 @@
 use plotters::{prelude::*, style::RGBAColor};
 use plotters::coord::Shift;
 use log::{error, warn, info, debug, trace, log_enabled, Level};
+use sqlx::mysql::MySqlRow;
+use sqlx::Row;
 
-pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32) -> Result<(), Box<dyn std::error::Error>>{
+pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32, rows: Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>>{
     info!("Drawing frequency chart for {the_city} from {first_year} to {last_year}");
-    // calc number of years to determine how wide to make the chart
     // column width should also be based on how best to fit the chart width 
-    //let years = last_year - first_year + 1;
-    //let width = years * 60 + 80;
+    //let number of rows returned determine the number of years
+    let years: u32 = rows.len() as u32;
+    let width: u32 = (years * 60) + 80 + 20;
+    info!("Freq Chart for {the_city}: width = {width} years = {years}");
 
     let city_path = format!("freq_charts/{}_range_freq.svg", the_city);
-    let root = SVGBackend::new(&city_path, (9200, 960)).into_drawing_area();
+    let root = SVGBackend::new(&city_path, (width, 1920)).into_drawing_area();
     root.fill(&WHITE).expect("Failed to fill the drawing area");
 
     let mut x: i32 = 80;
     let y: i32 = 30;
 
-    for _ in 0..150 {
-        let _ = draw_column(&root, x, y);
+    for row in rows {
+        let _ = draw_column(&root, x, y, row);
         x += 60;
     }
 
@@ -32,68 +35,60 @@ pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32) -> Resul
     }
     Ok(())
 }
-fn draw_column(root: &DrawingArea<SVGBackend, Shift>, x: i32, mut y: i32) -> Result<(), Box<dyn std::error::Error>> {
-    let mut freq = 46;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_100S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_90S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_80S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_70S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_60S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_50S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_40S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_30S, freq)?;
-    y += 100;
-    freq -= 5;
-    draw_rectangle(&root, x, y, x + 30, y + 100, STYLE_FREEZING, freq)?;
-    //println!("Drawing column at x: {}, final y: {}, final freq: {}", x, y, freq);
+fn draw_column(root: &DrawingArea<SVGBackend, Shift>, x: i32, mut y: i32, row: MySqlRow) -> Result<(), Box<dyn std::error::Error>> {
+    let frz: i32 = row.get("count_freezing");
+    let c30s: i32 = row.get("count_30s");
+    let c40s: i32 = row.get("count_40s");
+    let c50s: i32 = row.get("count_50s");
+    let c60s: i32 = row.get("count_60s");
+    let c70s: i32 = row.get("count_70s");
+    let c80s: i32 = row.get("count_80s");
+    let c90s: i32 = row.get("count_90s");
+    let c100s: i32 = row.get("count_100s");
+
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_100S, c100s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_90S, c90s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_80S, c80s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_70S, c70s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_60S, c60s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_50S, c50s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_40S, c40s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_30S, c30s)?;
+    y += 200;
+    draw_rectangle(&root, x, y, x + 30, y + 200, STYLE_FREEZING, frz)?;
     Ok(())
 }
 fn draw_rectangle(root: &DrawingArea<SVGBackend, Shift>, x: i32, y: i32, xr: i32, yr: i32, style: ShapeStyle, freq: i32) -> Result<(), Box<dyn std::error::Error>> {
     let freq_offset: i32;
-    let dots: i32;
+    let bars: i32;
     match freq {
-        f if f < 11 => {freq_offset = 100 - freq * 10; dots = 0;} ,
-        f if f < 21 => {freq_offset = 100 - (freq-10) * 10; dots = 1;} ,
-        f if f < 31 => {freq_offset = 100 - (freq-20) * 10; dots = 2;} ,
-        f if f < 41 => {freq_offset = 100 - (freq-30) * 10; dots = 3;} ,
-        f if f < 51 => {freq_offset = 100 - (freq-40) * 10; dots = 4;} ,
-        f if f < 52 => {freq_offset = 100 - (freq-41) * 10; dots = 4;} ,
-        f if f < 53 => {freq_offset = 100 - (freq-42) * 10; dots = 4;} ,
-        _ => {freq_offset = 0; dots = 0;}
+        f if f < 21 => {freq_offset = 200 - freq * 10; bars = 0;} ,
+        f if f < 41 => {freq_offset = 200 - (freq-20) * 10; bars = 1;} ,
+        f if f < 51 => {freq_offset = 200 - (freq-40) * 10; bars = 2;} ,
+        f if f < 52 => {freq_offset = 200 - (freq-41) * 10; bars = 2;} ,
+        f if f < 53 => {freq_offset = 200 - (freq-42) * 10; bars = 2;} ,
+        _ => {freq_offset = 0; bars = 0;}
     }
     root.draw(&Rectangle::new([(x, y + freq_offset), (xr, yr)], style.clone()))?;
     root.draw(&Rectangle::new([(x, y), (xr, yr)], STYLE_BLACK))?;
     let text_style = ("sans-serif", 16).into_font().color(&BLACK);
-    root.draw_text(&freq.to_string(), &text_style, (x + 32, y + 48))?;
-    match dots {
+    root.draw_text(&freq.to_string(), &text_style, (x + 32, y + 98))?;
+    match bars {
         0 => {},
-        1 => {root.draw(&Circle::new((x + 35, y + 41), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 41), 5, STYLE_BLACK))?;
+        1 => {root.draw(&Rectangle::new([(x + 31, y + 110), (x + 48, y + 200)], style.clone()))?;
+              root.draw(&Rectangle::new([(x + 31, y + 110), (x + 48, y + 200)], STYLE_BLACK))?;
         },
-        2 => {root.draw(&Circle::new((x + 35, y + 68), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 68), 5, STYLE_BLACK))?;
-              root.draw(&Circle::new((x + 35, y + 41), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 41), 5, STYLE_BLACK))?;
-            },
-        3 => {root.draw(&Circle::new((x + 35, y + 29), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 29), 5, STYLE_BLACK))?;
-              root.draw(&Circle::new((x + 35, y + 41), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 41), 5, STYLE_BLACK))?;
-              root.draw(&Circle::new((x + 35, y + 68), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 68), 5, STYLE_BLACK))?;
-            },
-        4 => {root.draw(&Circle::new((x + 35, y + 29), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 29), 5, STYLE_BLACK))?;
-              root.draw(&Circle::new((x + 35, y + 41), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 41), 5, STYLE_BLACK))?;
-              root.draw(&Circle::new((x + 35, y + 68), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 68), 5, STYLE_BLACK))?;
-              root.draw(&Circle::new((x + 35, y + 80), 5, style.clone()))?;root.draw(&Circle::new((x + 35, y + 80), 5, STYLE_BLACK))?;
+        2 => {root.draw(&Rectangle::new([(x + 31, y ), (x + 48, y + 90)], style.clone()))?;
+              root.draw(&Rectangle::new([(x + 31, y ), (x + 48, y + 90)], STYLE_BLACK))?;
+              root.draw(&Rectangle::new([(x + 31, y + 110), (x + 48, y + 200)], style.clone()))?;
+              root.draw(&Rectangle::new([(x + 31, y + 110), (x + 48, y + 200)], STYLE_BLACK))?;
             },
         _ => {}
     }
