@@ -184,6 +184,9 @@ async fn generate_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
     info!("Generating temp range frequency chart for {city} from {first_year} to {last_year}"); 
     let rows = get_temp_ranges(city).await?;
     draw_freq_chart(the_city, first_year, last_year, rows).expect("Failed to draw frequency chart");
+    //let rows = get_low_temp_ranges(city).await?;
+    //draw_freq_chart(the_city, first_year, last_year, rows).expect("Failed to draw frequency chart");
+
     Ok(())
 }
 
