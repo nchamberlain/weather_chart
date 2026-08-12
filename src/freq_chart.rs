@@ -3,21 +3,51 @@ use plotters::coord::Shift;
 use log::{error, warn, info, debug, trace, log_enabled, Level};
 use sqlx::mysql::MySqlRow;
 use sqlx::Row;
+use chrono::NaiveDate;
 
 pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32, rows: Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>>{
     info!("Drawing frequency chart for {the_city} from {first_year} to {last_year}");
-    // column width should also be based on how best to fit the chart width 
-    //let number of rows returned determine the number of years
+    // column width should some day also be based on how best to fit the chart width 
     let years: u32 = rows.len() as u32;
-    let width: u32 = (years * 60) + 80 + 20;
+    let width: u32 = (years * 60) + 80 + 80;
     info!("Freq Chart for {the_city}: width = {width} years = {years}");
 
     let city_path = format!("freq_charts/{}_range_freq.svg", the_city);
     let root = SVGBackend::new(&city_path, (width, 1920)).into_drawing_area();
     root.fill(&WHITE).expect("Failed to fill the drawing area");
+    let mut chart = ChartBuilder::on(&root)
+        .margin(10)
+        .caption(
+            format!("Number of Weeks per Year in Each Temperature Range For {} {} to {}", the_city, first_year, last_year),
+            ("sans-serif", 40),
+        )
+        .set_label_area_size(LabelAreaPosition::Left, 60)
+        .set_label_area_size(LabelAreaPosition::Right, 60)
+        .set_label_area_size(LabelAreaPosition::Bottom, 40)
+        .build_cartesian_2d(
+            (NaiveDate::from_ymd_opt(first_year-1, 6, 1).unwrap()..NaiveDate::from_ymd_opt(last_year+1, 6, 1).unwrap()).monthly(),
+            20.0..110.0,
+        )?
+        .set_secondary_coord(
+            (NaiveDate::from_ymd_opt(first_year-1, 6, 1).unwrap()..NaiveDate::from_ymd_opt(last_year+1, 6, 1).unwrap()).monthly(),
+            -6.7..43.3,
+        );
 
-    let mut x: i32 = 80;
-    let y: i32 = 30;
+    chart
+        .configure_mesh()
+        .disable_x_mesh()
+        //.disable_y_mesh()
+        .x_labels(30)
+        .max_light_lines(4)
+        .y_desc("Average Temp (F)")
+        .draw()?;
+    chart
+        .configure_secondary_axes()
+        .y_desc("Average Temp (C)")
+        .draw()?;
+
+    let mut x: i32 = 95;
+    let y: i32 = 68;
 
     for row in rows {
         let _ = draw_column(&root, x, y, row);
