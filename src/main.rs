@@ -741,21 +741,17 @@ async fn get_temp_ranges(city: &str) -> Result<Vec<sqlx::mysql::MySqlRow>, sqlx:
         error!("No data found for city: {}", city);
         return Err(sqlx::Error::RowNotFound);
     }
-    if log_enabled!(Level::Debug) {
-        let first_row = &rows[0];
-        let yr: i32 = first_row.get("tyear");
-        let frz: i32 = first_row.get("count_freezing");
-        let c30s: i32 = first_row.get("count_30s");
-        let c40s: i32 = first_row.get("count_40s");
-        let c50s: i32 = first_row.get("count_50s");
-        let c60s: i32 = first_row.get("count_60s");
-        let c70s: i32 = first_row.get("count_70s");
-        let c80s: i32 = first_row.get("count_80s");
-        let c90s: i32 = first_row.get("count_90s");
-        let c100s: i32 = first_row.get("count_100s");
-        info!("Temp freqs for {city} year {yr}: {frz}, {c30s}, {c40s}, {c50s}, {c60s}, {c70s}, {c80s}, {c90s}, {c100s}");
+    Ok(rows)
+}
+async fn get_nite_temp_ranges(city: &str) -> Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> {
+    let query_string = format!("SELECT * FROM {}_nite_ranges", city); // Adjust table name as needed
+    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
+        .fetch_all(DB_POOL.get().expect("Database pool not initialized"))
+        .await?; // had to make this function return a Result to use the ? operator
+    if rows.is_empty() {
+        error!("No data found for city: {}", city);
+        return Err(sqlx::Error::RowNotFound);
     }
-
     Ok(rows)
 }
 async fn get_temps(tperiod: &str, city: &str, year: i32) -> Result<Vec<MySqlRow>, sqlx::Error> {
