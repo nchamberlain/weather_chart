@@ -5,15 +5,20 @@ use sqlx::mysql::MySqlRow;
 use sqlx::Row;
 use chrono::NaiveDate;
 
-pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32, rows: Vec<MySqlRow>) -> Result<(), Box<dyn std::error::Error>>{
+// This funct will do either daytime or nighttime charts depending on the rows that are passed to it
+pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32, rows: Vec<MySqlRow>, is_day: bool) -> Result<(), Box<dyn std::error::Error>>{
     info!("Drawing frequency chart for {the_city} from {first_year} to {last_year}");
     // column width should some day also be based on how best to fit the chart width 
     let years: i32 = rows.len() as i32;
     let width: i32 = (years * 60) + 80 + 80;
     let city_title = the_city.replace("_", " ");
+    let city_path: String;
     info!("Freq Chart for {city_title}: width = {width} years = {years}");
-
-    let city_path = format!("freq_charts/{}_range_freq.svg", the_city);
+    if is_day {
+        city_path = format!("freq_charts/{}_range_freq.svg", the_city);
+    } else {
+        city_path = format!("freq_charts/{}_nite_range_freq.svg", the_city);
+    }
     let root = SVGBackend::new(&city_path, (width as u32, 2160)).into_drawing_area();
     root.fill(&WHITE).expect("Failed to fill the drawing area");
 

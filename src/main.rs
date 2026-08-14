@@ -171,11 +171,11 @@ async fn generate_range_charts() -> Result<(), sqlx::Error> {
 
     for the_city in selected_cities {
         debug!("Selected RANGE chart for the city of {0}", the_city.clone().red());
-        generate_city_range_charts(&the_city).await?;    
+        generate_one_city_range_charts(&the_city).await?;    
     }
     Ok(())
 }
-async fn generate_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
+async fn generate_one_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
     debug!("Generating one range chart: {0}", the_city);
     let city  = the_city;
     let first_year: i32 = get_1st_year(&the_city).await;
@@ -183,10 +183,11 @@ async fn generate_city_range_charts(the_city: &str) -> Result<(), sqlx::Error> {
 
     info!("Generating temp range frequency chart for {city} from {first_year} to {last_year}"); 
     let rows = get_temp_ranges(city).await?;
-    draw_freq_chart(the_city, first_year, last_year, rows).expect("Failed to draw frequency chart");
-    //let rows = get_low_temp_ranges(city).await?;
-    //draw_freq_chart(the_city, first_year, last_year, rows).expect("Failed to draw frequency chart");
-
+    let mut is_day: bool = true; // daytime chart)
+    draw_freq_chart(the_city, first_year, last_year, rows, is_day).expect("Failed to draw frequency chart");
+    let nite_rows = get_nite_temp_ranges(city).await?;
+    is_day = false; // nighttime chart
+    draw_freq_chart(the_city, first_year, last_year, nite_rows, is_day).expect("Failed to draw frequency chart");
     Ok(())
 }
 
