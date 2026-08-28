@@ -15,15 +15,15 @@ pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32, rows: Ve
     let city_path: String;
     info!("Freq Chart for {city_title}: width = {width} years = {years}");
     if is_day {
-        city_path = format!("freq_charts/{}_range_freq.svg", the_city);
+        city_path = format!("freq_charts/{}_range_freq_D.svg", the_city);
     } else {
-        city_path = format!("freq_charts/{}_nite_range_freq.svg", the_city);
+        city_path = format!("freq_charts/{}_range_freq_N.svg", the_city);
     }
     let root = SVGBackend::new(&city_path, (width as u32, 2160)).into_drawing_area();
     root.fill(&WHITE).expect("Failed to fill the drawing area");
 
     let areas = root.split_by_breakpoints(
-        [100, (width - 100)],                                //makes 3 columns
+        [100, (width - 100)],                                //makes 3 columns (0100, 100-(wid-100), (wid-100)-width)
         [100, 310, 520, 730, 940, 1150, 1360, 1570, 1780, 1990], //makes 11 rows
     );
     // title row areas[0] areas[1] areas[2]
@@ -116,9 +116,12 @@ pub fn draw_freq_chart(the_city: &str, first_year: i32, last_year: i32, rows: Ve
     root.draw_text("0 - 4", &text_style, (width - 80, 1670))?;
     root.draw_text("0 \u{2193}", &text_style, (width - 80, 1880))?;
     // draw caption (Chart Title)
-    let title = format!(
-        "Daytime Temperature Range Frequency for {city_title} from {first_year} to {last_year}"
-    );
+    let title: String;
+    if is_day {
+        title = format!("Daytime Temperature Range Frequency for {city_title} from {first_year} to {last_year}");
+    } else {
+        title = format!("Night Time Temperature Range Frequency for {city_title} from {first_year} to {last_year}");
+    }
     let mut chart_area1 = ChartBuilder::on(&areas[1])
         .margin(40)
         .caption(title, ("sans-serif", 40))

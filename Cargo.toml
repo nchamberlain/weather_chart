@@ -15,3 +15,6 @@ chrono = "0.4.45"
 fahrenheit_to_celsius = "0.2"
 log = "0.4.33"
 env_logger = "0.11.11"
+
+[patch.crates-io]
+plotters = { path = "/Users/cofee/plotters/plotters"}

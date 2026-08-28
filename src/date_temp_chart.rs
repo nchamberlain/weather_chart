@@ -26,6 +26,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let mut chart_title = String::new();
     let mut out_file_name = String::new();
     let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
+    let mut the_color: RGBColor;
     let query_limit = 10000;
     //let city_fmt: String = city.replace("_", " ");
     match chart_type {
@@ -33,23 +34,27 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 chart_title = format!("{}: {} Hottest Daytime Temperatures", city.replace("_", " "), query_limit);
                 query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
+                the_color = COLOR_HOT;
             },
         2 => {debug!("Generating High-Min charts for {city}");
                 chart_title = format!("{}: {} Coolest Daytime Temperatures", city.replace("_", " "), query_limit);
                 query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
+                the_color = COLOR_WARM;
             },
         3 => {debug!("Generating Low-Max charts for {city}");
                 chart_title = format!("{}: {} Coldest Nighttime Temperatures", city.replace("_", " "), query_limit);
                 query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
+                the_color = COLOR_COLD;
             },
         4 => {debug!("Generating Low-Min charts for {city}");
                 chart_title = format!("{}: {} Warmest Nighttime Temperatures", city.replace("_", " "), query_limit);
                 query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
+                the_color = COLOR_COOL;
             },
-        _ => error!("Unknown chart type"),
+        _ => {the_color = COLOR_HOT; error!("Unknown chart type");},
     }
     // this db call should really be in db_ops but is so specialized it doesn't seem worth the effort to move
     let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
@@ -67,13 +72,17 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     let latest_date = NaiveDate::parse_from_str(latest_date_str, "%Y-%m-%d").unwrap_or(NaiveDate::from_ymd_opt(2070, 1, 1).unwrap()) + Months::new(11); // add 11 month to give some padding on the right side of the chart
     let full_chart_title = format!("{}, {} to {}", chart_title, earliest_date_str, latest_date_str);
 
-    let root = SVGBackend::new(&out_file_name, (15360, 1920)).into_drawing_area();
+    let years: u32 = latest_date.years_since(earliest_date).unwrap();
+    let width = years * 60 + 180;
+    info!("Width {width} for {earliest_date} to {latest_date}");
+
+    let root = SVGBackend::new(&out_file_name, (width, 1920)).into_drawing_area();
     let _ = root.fill(&WHITE);
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
-        .caption(full_chart_title, ("sans-serif", 36),)
-        .set_label_area_size(LabelAreaPosition::Left, 60)
-        .set_label_area_size(LabelAreaPosition::Right, 60)
+        .caption(full_chart_title, ("sans-serif", 48),)
+        .set_label_area_size(LabelAreaPosition::Left, 100)
+        .set_label_area_size(LabelAreaPosition::Right, 100)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
         .build_cartesian_2d((earliest_date..latest_date).monthly(),lowest_temp..highest_temp,
         ).unwrap()
@@ -85,14 +94,14 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
         .disable_x_mesh()
         //.disable_y_mesh()
         .x_labels(30)
-        .label_style(("sans-serif", 14))
+        .label_style(("sans-serif", 36))
         .max_light_lines(4)
         //.y_label_style(("sans-serif", 16))
         .y_desc("Average Temp (F)")
         .draw().unwrap();
     chart
         .configure_secondary_axes()
-        .label_style(("sans-serif", 14))
+        .label_style(("sans-serif", 36))
         .y_desc("Average Temp (C)")
         .draw().unwrap();
 
@@ -103,7 +112,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 let temp: i32 = row.get(1);
                 Circle::new(
                 (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp as f64),
-                     2, BLUE.filled())})
+                     2, the_color.filled())})
             ).expect("Error drawing series");
     // display dup data for diagnostic purposes
     if log_enabled!(Level::Debug) {
@@ -111,7 +120,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
             debug!("Duplicate date found: {} for temp: {} count: {}", item.0, item.1.0, item.1.1);
         }
     }
-    chart.draw_series(PointSeries::of_element(dup_dates, 4, RGBColor(0,115,153).mix(0.6).filled(),  
+    chart.draw_series(PointSeries::of_element(dup_dates, 4, the_color.mix(0.6).filled(),  
         &|item, s, st| {
                 let date_str = item.0;
                 let temp = item.1.0;
@@ -172,3 +181,21 @@ fn f_to_c(num: f64) -> f64 {
     debug!("\nC = {}", result);
     result
 }
+
+const COLOR_HOT: RGBColor = RGBColor(220, 20, 60);
+const COLOR_WARM: RGBColor = RGBColor(255, 69, 0);
+const COLOR_COOL: RGBColor = RGBColor(0, 128, 0);
+const COLOR_COLD: RGBColor = RGBColor(0, 0, 205);
+
+//const COLOR_100S: RGBAColor = RGBAColor(255, 0, 0, 0.9);
+//const COLOR_HOT: RGBAColor = RGBAColor(220, 20, 60, 0.88);
+//const COLOR_WARM: RGBAColor = RGBAColor(255, 69, 0, 0.7);
+//const COLOR_70S: RGBAColor = RGBAColor(50, 205, 51, 0.7);
+//const COLOR_COOL: RGBAColor = RGBAColor(0, 128, 0, 0.9);
+//const COLOR_50S: RGBAColor = RGBAColor(0, 139, 128, 0.6);
+//const COLOR_COLD: RGBAColor = RGBAColor(70, 130, 132, 0.95);
+//const COLOR_30S: RGBAColor = RGBAColor(0, 0, 205, 0.7);
+//const COLOR_FREEZING: RGBAColor = RGBAColor(0, 0, 128, 0.95);
+//const COLOR_WHITE: RGBAColor = RGBAColor(250, 250, 250, 0.2);
+//const COLOR_BLACK: RGBAColor = RGBAColor(0, 0, 0, 0.99);
+
