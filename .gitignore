@@ -11,6 +11,8 @@ bar_charts/
 date_charts/
 line_charts/
 freq_charts/
+date_pngs/
+freq_pngs/
 bar_pngs/
 line_pngs/
 videos/*.*
