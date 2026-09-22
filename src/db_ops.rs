@@ -3,7 +3,6 @@ use sqlx::Row;
 use log::{error, warn, info, debug, trace, log_enabled, Level};
 //use plotters::prelude::*;
 
-
 // SQL query to retreive all city names in city_names table
 pub async fn fetch_cities() -> Result<Vec<MySqlRow>, sqlx::Error> {
     debug!("Selected FETCH all Cities from city_names table");

@@ -25,41 +25,38 @@ pub async fn generate_date_temp_charts(the_city: &str) -> Result<(), sqlx::Error
 async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::Error> {
     let mut chart_title = String::new();
     let mut out_file_name = String::new();
-    let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
-    let mut the_color: RGBColor;
+    //let mut query_string = String::new();//format!("SELECT tdate, tmax, tmin FROM {} ORDER BY tdate", city);
+    let the_color: RGBColor;
     let query_limit = 10000;
     //let city_fmt: String = city.replace("_", " ");
     match chart_type {
         1 => {debug!("Generating High-Max charts for {city}");
                 chart_title = format!("{}: {} Hottest Daytime Temperatures", city.replace("_", " "), query_limit);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax DESC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_high_max.svg", city);
                 the_color = COLOR_HOT;
             },
         2 => {debug!("Generating High-Min charts for {city}");
                 chart_title = format!("{}: {} Coolest Daytime Temperatures", city.replace("_", " "), query_limit);
-                query_string = format!("SELECT tdate, tmax FROM {} where tmax is not null ORDER BY tmax ASC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_high_min.svg", city);
                 the_color = COLOR_WARM;
             },
         3 => {debug!("Generating Low-Max charts for {city}");
                 chart_title = format!("{}: {} Coldest Nighttime Temperatures", city.replace("_", " "), query_limit);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin ASC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_low_max.svg", city);
                 the_color = COLOR_COLD;
             },
         4 => {debug!("Generating Low-Min charts for {city}");
                 chart_title = format!("{}: {} Warmest Nighttime Temperatures", city.replace("_", " "), query_limit);
-                query_string = format!("SELECT tdate, tmin FROM {} where tmin is not null ORDER BY tmin DESC, tdate ASC LIMIT {}", city, query_limit);
                 out_file_name = format!("date_charts/{}_low_min.svg", city);
                 the_color = COLOR_COOL;
             },
         _ => {the_color = COLOR_HOT; error!("Unknown chart type");},
     }
     // this db call should really be in db_ops but is so specialized it doesn't seem worth the effort to move
-    let rows: Vec<sqlx::mysql::MySqlRow> = sqlx::query(&query_string)
-        .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
-        .await?;
+    let rows: Vec<sqlx::mysql::MySqlRow> = get_all_rows(city, chart_type, query_limit).await?; 
+    info!("{} rows returned for {city} chart type {chart_type}", rows.len());
+    debug!("Temp row 10000 {}", rows[10000].get::<i32, _>(1));
+
     let dup_dates: HashMap<&str, (f64, i32)> = find_dup_dates(&rows); //use this hashmap later
 
     // find highest & lowest Temps from rows to set the y axis range
@@ -136,6 +133,101 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     root.present().expect("Unable to write result to file, please make sure 'date_charts' folder exists under current dir");
     info!("Result has been saved to {}", out_file_name);
     Ok(())
+}
+async fn get_all_rows(city: &str, chart_type: i32, query_limit: usize) -> Result<Vec<sqlx::mysql::MySqlRow>, sqlx::Error> {
+    let rows: Vec<sqlx::mysql::MySqlRow>;
+    //let mut range_temp: i32 = 0;
+    //let range_query: String;
+    //let final_query: String;
+    match chart_type {
+        1 => {debug!("Generating High-Max charts for {city}");
+                let range_query = format!("SELECT tmax FROM {} where tmax is not null ORDER BY tmax DESC LIMIT {}", city, query_limit as i32);
+                let range_result= sqlx::query(&range_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if range_result.is_empty() {
+                    error!("No range data found for city: {}", city);
+                    return Err(sqlx::Error::RowNotFound);
+                }
+                let range_temp: i32 = range_result[query_limit-1].get(0); //get the lowest temp in the top 10000 hottest days
+                info!("Temp in row[{}] hottest days for {city} is {}", query_limit, range_temp);
+                let final_query = format!("SELECT tdate, tmax FROM {} where tmax is not null AND tmax > {} ORDER BY tmax DESC, tdate ASC", city, range_temp-1);
+                rows= sqlx::query(&final_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if rows.is_empty() {
+                    error!("No final data found for city: {}", city); 
+                    return Err(sqlx::Error::RowNotFound);
+                }
+            },
+        2 => {debug!("Generating High-Min charts for {city}");
+                let range_query = format!("SELECT tmax FROM {} where tmax is not null ORDER BY tmax LIMIT {}", city, query_limit as i32);
+                let range_result= sqlx::query(&range_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if range_result.is_empty() {
+                    error!("No range data found for city: {}", city);
+                    return Err(sqlx::Error::RowNotFound);
+                }
+                let range_temp: i32 = range_result[query_limit-1].get(0); //get the warmest temp in the top 10000 coolest days
+                info!("Temp in row[{}] coolest days for {city} is {}", query_limit, range_temp);
+                let final_query = format!("SELECT tdate, tmax FROM {} where tmax is not null AND tmax < {} ORDER BY tmax, tdate", city, range_temp+1);
+                rows = sqlx::query(&final_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if rows.is_empty() {
+                    error!("No final data found for city: {}", city); 
+                    return Err(sqlx::Error::RowNotFound);
+                }
+            },
+        3 => {debug!("Generating Low-Max charts for {city}");
+                let range_query = format!("SELECT tmin FROM {} where tmin is not null ORDER BY tmin ASC LIMIT {}", city, query_limit as i32);
+                let range_result= sqlx::query(&range_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if range_result.is_empty() {
+                    error!("No range data found for city: {}", city);
+                    return Err(sqlx::Error::RowNotFound);
+                }
+                let range_temp: i32 = range_result[query_limit-1].get(0); //get the warmest temp in the top 10000 coldest nights
+                info!("Temp in row[{}] coldest nights for {city} is {}", query_limit, range_temp);
+                let final_query = format!("SELECT tdate, tmin FROM {} where tmin is not null AND tmin < {} ORDER BY tmin, tdate ASC", city, range_temp+1);
+                rows = sqlx::query(&final_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if rows.is_empty() {
+                    error!("No final data found for city: {}", city); 
+                    return Err(sqlx::Error::RowNotFound);
+                }
+            },
+        4 => {debug!("Generating Low-Min charts for {city}");
+                let range_query = format!("SELECT tmin FROM {} where tmin is not null ORDER BY tmin DESC LIMIT {}", city, query_limit as i32);
+                let range_result= sqlx::query(&range_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if range_result.is_empty() {
+                    error!("No range data found for city: {}", city);
+                    return Err(sqlx::Error::RowNotFound);
+                }
+                let range_temp: i32 = range_result[query_limit-1].get(0); //get the coldest temp in the top 10000 warmest nights
+                info!("Temp in row[{}] warmest nights for {city} is {}", query_limit, range_temp);
+                let final_query = format!("SELECT tdate, tmin FROM {} where tmin is not null AND tmin > {} ORDER BY tmin DESC, tdate ASC", city, range_temp-1);
+                rows = sqlx::query(&final_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                if rows.is_empty() {
+                    error!("No final data found for city: {}", city); 
+                    return Err(sqlx::Error::RowNotFound);
+                }
+            },
+        _ => {  let bad_query = format!("SELECT tdate FROM {} where tmin > 800", city);
+                rows = sqlx::query(&bad_query)
+                    .fetch_all(crate::DB_POOL.get().expect("Database pool not initialized"))
+                    .await?; 
+                error!("Unknown chart type");
+            },
+    }
+    Ok(rows)
 }
 fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)> {
     let mut dup_dates: HashMap<&str, (f64, i32)> = HashMap::new();
