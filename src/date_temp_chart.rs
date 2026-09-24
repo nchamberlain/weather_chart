@@ -57,11 +57,13 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
     info!("{} rows returned for {city} chart type {chart_type}", rows.len());
     debug!("Temp row 10000 {}", rows[10000].get::<i32, _>(1));
 
-    let dup_dates: HashMap<&str, (f64, i32)> = find_dup_dates(&rows); //use this hashmap later
+    let dup_dates: HashMap<&str, (i32, i32)> = find_dup_dates(&rows); //use this hashmap later
 
     // find highest & lowest Temps from rows to set the y axis range
     let highest_temp: f64= rows.iter().map(|row| row.get::<i32, _>(1)).max().unwrap_or(0) as f64 + 1.0;
+    let i_highest = highest_temp.round() as i32;
     let lowest_temp: f64 = rows.iter().map(|row| row.get::<i32, _>(1)).min().unwrap_or(0) as f64 - 1.0;
+    let i_lowest = lowest_temp.round() as i32;
     // find the earliest and latest dates to set x axis range
     let earliest_date_str = rows.iter().map(|row| row.get::<&str, _>(0)).min().unwrap_or("1800-01-01");
     let latest_date_str = rows.iter().map(|row| row.get::<&str, _>(0)).max().unwrap_or("2070-01-01");
@@ -81,9 +83,9 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
         .set_label_area_size(LabelAreaPosition::Left, 100)
         .set_label_area_size(LabelAreaPosition::Right, 100)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
-        .build_cartesian_2d((earliest_date..latest_date).monthly(),lowest_temp..highest_temp,
+        .build_cartesian_2d((earliest_date..latest_date).monthly(),i_lowest..i_highest,
         ).unwrap()
-        .set_secondary_coord((earliest_date..latest_date).monthly(), f_to_c(lowest_temp)..f_to_c(highest_temp),
+        .set_secondary_coord((earliest_date..latest_date).monthly(), f_to_c(lowest_temp).round() as i32..f_to_c(highest_temp).round() as i32,
         );
 
     chart
@@ -108,7 +110,7 @@ async fn make_date_time_charts(city: &str, chart_type: i32) -> Result<(), sqlx::
                 let date_str: &str = row.get(0);
                 let temp: i32 = row.get(1);
                 Circle::new(
-                (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp as f64),
+                (NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap(), temp),
                      2, the_color.filled())})
             ).expect("Error drawing series");
     // display dup data for diagnostic purposes
@@ -229,8 +231,8 @@ async fn get_all_rows(city: &str, chart_type: i32, query_limit: usize) -> Result
     }
     Ok(rows)
 }
-fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)> {
-    let mut dup_dates: HashMap<&str, (f64, i32)> = HashMap::new();
+fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (i32, i32)> {
+    let mut dup_dates: HashMap<&str, (i32, i32)> = HashMap::new();
     let mut tdate = "1800-01-01";
     let mut count = 1;
 
@@ -247,7 +249,7 @@ fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)
                 if tdate == "1800-01-01" { //this check preserves original tdate with subsequent readings that will appear in the same dot-space
                     tdate = current_row.get(0);
                 }
-                dup_dates.insert(tdate, (current_temp as f64, count));
+                dup_dates.insert(tdate, (current_temp, count));
                 // FIX WHEN NEEDED debug!("Temp = {}: Dates {} and {} are {} days apart. Count: {}. tdate: {}", current_temp, tdate, next_date, days_apart, count, tdate);
             } else {
                 count = 1;
@@ -255,7 +257,7 @@ fn find_dup_dates(rows: &Vec<sqlx::mysql::MySqlRow>) -> HashMap<&str, (f64, i32)
             }
         } // else if count > 1 push the dup date info into the hashmap and reset count and tdate
          else if count > 1 {
-            dup_dates.insert(tdate, (current_temp as f64, count));
+            dup_dates.insert(tdate, (current_temp, count));
             debug!("Non-matching temp found. Temp = {}: Count: {}. tdate: {}", current_temp, count, tdate);
             count = 1;
             tdate = "1800-01-01";
