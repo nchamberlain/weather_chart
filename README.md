@@ -1,5 +1,7 @@
 # weatherChart
-This project is designed to extract data from the city temperature database and produce the relavent charts. There are four existing types of charts:
+
+## NOTE: Modified plotters-svg crate and patched plotters to remove height & width on 8/27/26 so svg charts can scale. 
+This project is designed to extract data from the city temperature database and produce the relevant charts. There are four existing types of charts:
 
  - Bar Charts
  - Line Charts
@@ -14,7 +16,7 @@ Bar charts display the average temperature by period (week, 2-week, month) for e
 
 ## Line Charts
 
-Line charts display the average and median tempertures by period (week, 2-week, month) for exactly 1 year. Line charts show only 2 lines: red lines with bullets for that period's average high temperature and blue lines with bullets for that period's average low temperature. The high temp line and low temp lines are also annotated with the median high and median low tempertures as short bars.
+Line charts display the average and median temperatures by period (week, 2-week, month) for exactly 1 year. Line charts show only 2 lines: red lines with bullets for that period's average high temperature and blue lines with bullets for that period's average low temperature. The high temp line and low temp lines are also annotated with the median high and median low temperatures as short bars.
 
 ![linechart](imgs/linechart.jpg)
 
@@ -56,7 +58,7 @@ The Top 10% Charts select approximately 10% of the daily temperature records and
 
 It is important to note that these are individual daily records and NOT based on calculated averages. This helps to remove the potential for calculations to somehow skew the data presentation.
 
-These charts have to be extremely large to accomodate the 100 - 150 years covered for each city. To spread the temperature dots as much as possible, these charts can be 10,000 pixels wide (which are hard to view). Even with the wide chart format, when the same temperatures happened in the same week or two, they would end up printing as the same dot. To prevent this misleading display, close date temperatures are accumulated and printed as proportionally larger dots.
+These charts have to be extremely large to accommodate the 100 - 150 years covered for each city. To spread the temperature dots as much as possible, these charts can be 10,000 pixels wide (which are hard to view). Even with the wide chart format, when the same temperatures happened in the same week or two, they would end up printing as the same dot. To prevent this misleading display, close date temperatures are accumulated and printed as proportionally larger dots.
 
 In general, we see more of the top 10% hottest temperatures in the 21st century and the more of the top 10% coldest temperatures in the 19th and 20th centuries. We also see "jackpot" temperatures, where conditions are exactly right to produce extreme temperatures that are 4 - 8 degrees warmer or cooler in one or a couple of years. 
 
